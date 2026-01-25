@@ -4,10 +4,12 @@ import {
     Users,
     FileText,
     Calendar,
-    ClipboardCheck,
-    Settings,
-    LogOut,
-    Building2
+    Building2,
+    ShieldCheck,
+    Upload,
+    CalendarDays,
+    CalendarRange,
+    LogOut
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { ROLES } from "../lib/roles";
@@ -21,27 +23,33 @@ const Sidebar = () => {
 
     const MENUS = [
         {
-            title: "General",
+            title: "", // Top level (no title for this specific item in group)
             items: [
                 {
-                    label: "Dashboard",
+                    label: "Tổng quan",
                     path: "/",
                     icon: LayoutDashboard,
-                    roles: Object.values(ROLES) // All roles
+                    roles: Object.values(ROLES)
                 },
             ]
         },
         {
-            title: "Management",
+            title: "QUẢN LÝ HỆ THỐNG",
             items: [
                 {
-                    label: "Users",
+                    label: "Người dùng",
                     path: "/admin/users",
                     icon: Users,
                     roles: [ROLES.ADMIN]
                 },
                 {
-                    label: "Departments",
+                    label: "Vai trò & Phân quyền",
+                    path: "/admin/roles", // Placeholder route
+                    icon: ShieldCheck,
+                    roles: [ROLES.ADMIN]
+                },
+                {
+                    label: "Phòng ban",
                     path: "/admin/departments",
                     icon: Building2,
                     roles: [ROLES.ADMIN]
@@ -49,47 +57,41 @@ const Sidebar = () => {
             ]
         },
         {
-            title: "Documents",
+            title: "QUẢN LÝ TÀI LIỆU",
             items: [
                 {
-                    label: "My Documents",
-                    path: "/documents/upload",
-                    icon: FileText,
-                    roles: [ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT]
-                },
-                {
-                    label: "Approvals",
-                    path: "/documents/approvals",
-                    icon: ClipboardCheck,
-                    roles: [ROLES.HEAD_OF_DEPT]
-                },
-                {
-                    label: "Repository",
+                    label: "Danh sách Tài liệu",
                     path: "/documents/repository",
                     icon: FileText,
-                    roles: [ROLES.HOSPITAL_CLERK]
+                    roles: [ROLES.HOSPITAL_CLERK, ROLES.ADMIN, ROLES.HEAD_OF_DEPT, ROLES.STAFF] // Broad access for "Public" docs
+                },
+                {
+                    label: "Upload tài liệu",
+                    path: "/documents/upload",
+                    icon: Upload,
+                    roles: [ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.ADMIN]
                 },
             ]
         },
         {
-            title: "Planning & Schedule",
+            title: "QUẢN LÝ LỊCH",
             items: [
                 {
-                    label: "My Schedule",
+                    label: "Lịch trực",
                     path: "/schedule/me",
                     icon: Calendar,
-                    roles: [ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.HOSPITAL_CLERK]
+                    roles: [ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.HOSPITAL_CLERK, ROLES.KHTH, ROLES.ADMIN]
                 },
                 {
-                    label: "Dept Planning",
+                    label: "Lịch công tác tuần",
                     path: "/schedule/department",
-                    icon: Calendar,
-                    roles: [ROLES.DEPT_CLERK]
+                    icon: CalendarDays,
+                    roles: [ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.ADMIN]
                 },
                 {
-                    label: "Master Schedule",
+                    label: "Tất cả Lịch trình",
                     path: "/schedule/master",
-                    icon: Calendar,
+                    icon: CalendarRange,
                     roles: [ROLES.KHTH, ROLES.ADMIN]
                 },
             ]
@@ -98,53 +100,51 @@ const Sidebar = () => {
 
     return (
         <aside className="w-64 bg-white border-r border-slate-200 h-screen flex flex-col fixed left-0 top-0 z-10 transition-all font-sans">
-            <div className="h-16 flex items-center px-6 border-b border-slate-100">
-                <div className="flex items-center gap-2 text-blue-600 font-bold text-xl tracking-tight">
-                    <div className="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center">
-                        H
-                    </div>
-                    <span>MediManage</span>
-                </div>
+            {/* Header */}
+            <div className="h-24 flex items-center justify-center border-b border-transparent">
+                <h1 className="text-xl font-bold text-slate-800 text-center px-4">
+                    Quản lý bệnh viện
+                </h1>
             </div>
 
-            <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
+            <div className="flex-1 overflow-y-auto py-2 px-4 space-y-6">
                 {MENUS.map((group, idx) => (
                     <div key={idx}>
-                        {group.items.some(item => item.roles.includes(user.role)) && (
-                            <>
-                                <h3 className="px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                                    {group.title}
-                                </h3>
-                                <div className="space-y-1">
-                                    {group.items
-                                        .filter(item => item.roles.includes(user.role))
-                                        .map((item) => {
-                                            const isActive = location.pathname === item.path;
-                                            const Icon = item.icon;
-
-                                            return (
-                                                <Link
-                                                    key={item.path}
-                                                    to={item.path}
-                                                    className={cn(
-                                                        "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                                                        isActive
-                                                            ? "bg-blue-50 text-blue-700"
-                                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                                                    )}
-                                                >
-                                                    <Icon size={18} />
-                                                    {item.label}
-                                                </Link>
-                                            );
-                                        })}
-                                </div>
-                            </>
+                        {group.title && group.items.some(item => item.roles.includes(user.role)) && (
+                            <h3 className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 mt-2">
+                                {group.title}
+                            </h3>
                         )}
+
+                        <div className="space-y-1">
+                            {group.items
+                                .filter(item => item.roles.includes(user.role))
+                                .map((item) => {
+                                    const isActive = location.pathname === item.path;
+                                    const Icon = item.icon;
+
+                                    return (
+                                        <Link
+                                            key={item.path}
+                                            to={item.path}
+                                            className={cn(
+                                                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                                                isActive
+                                                    ? "bg-slate-100 text-slate-900 font-semibold"
+                                                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                            )}
+                                        >
+                                            <Icon size={18} strokeWidth={2} className={isActive ? "text-slate-900" : "text-slate-500"} />
+                                            {item.label}
+                                        </Link>
+                                    );
+                                })}
+                        </div>
                     </div>
                 ))}
             </div>
 
+            {/* User Footer */}
             <div className="p-4 border-t border-slate-100">
                 <div className="flex items-center gap-3 mb-4 px-2">
                     <img
@@ -162,7 +162,7 @@ const Sidebar = () => {
                     className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
                 >
                     <LogOut size={16} />
-                    Sign Out
+                    Đăng xuất
                 </button>
             </div>
         </aside>

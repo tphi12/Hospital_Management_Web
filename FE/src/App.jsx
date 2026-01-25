@@ -5,11 +5,15 @@ import { AuthProvider } from "./context/AuthContext";
 import { ROLES } from "./lib/roles";
 
 // Pages
+// Pages
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Unauthorized from "./pages/Unauthorized";
-import { UserManagement, DeptManagement } from "./pages/admin/AdminPages";
-import { DocumentUpload, DocumentApprovals, DocumentRepository } from "./pages/documents/DocumentPages";
+import UserManagement from "./pages/admin/UserManagement";
+import DepartmentManagement from "./pages/admin/DepartmentManagement";
+import DocumentUpload from "./pages/documents/DocumentUpload";
+import DocumentList from "./pages/documents/DocumentList";
+import { DocumentApprovals } from "./pages/documents/DocumentPages";
 import { MySchedule, DeptSchedule, MasterSchedule } from "./pages/schedule/SchedulePages";
 
 function App() {
@@ -53,7 +57,7 @@ function App() {
             path="/admin/departments"
             element={
               <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
-                <DeptManagement />
+                <DepartmentManagement />
               </ProtectedRoute>
             }
           />
@@ -78,8 +82,8 @@ function App() {
           <Route
             path="/documents/repository"
             element={
-              <ProtectedRoute allowedRoles={[ROLES.HOSPITAL_CLERK]}>
-                <DocumentRepository />
+              <ProtectedRoute allowedRoles={[ROLES.HOSPITAL_CLERK, ROLES.ADMIN, ROLES.HEAD_OF_DEPT, ROLES.STAFF]}>
+                <DocumentList />
               </ProtectedRoute>
             }
           />
