@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
     LayoutDashboard,
     Users,
+    User,
     FileText,
     Calendar,
     Building2,
@@ -13,7 +14,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { ROLES } from "../lib/roles";
-import { cn } from "../lib/utils";
 
 const Sidebar = () => {
     const { user, logout } = useAuth();
@@ -84,76 +84,72 @@ const Sidebar = () => {
                 },
                 {
                     label: "Lịch công tác tuần",
-                    path: "/schedule/department",
+                    path: "/schedule/weekly",
                     icon: CalendarDays,
-                    roles: [ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.ADMIN]
+                    roles: [ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.ADMIN, ROLES.KHTH, ROLES.STAFF, ROLES.HOSPITAL_CLERK]
                 },
                 {
-                    label: "Tất cả Lịch trình",
+                    label: "Lịch trực toàn viện",
                     path: "/schedule/master",
                     icon: CalendarRange,
-                    roles: [ROLES.KHTH, ROLES.ADMIN]
+                    roles: [ROLES.KHTH, ROLES.ADMIN, ROLES.STAFF, ROLES.HEAD_OF_DEPT, ROLES.DEPT_CLERK, ROLES.HOSPITAL_CLERK]
                 },
             ]
         },
     ];
 
     return (
-        <aside className="w-64 bg-white border-r border-slate-200 h-screen flex flex-col fixed left-0 top-0 z-10 transition-all font-sans">
-            {/* Header */}
-            <div className="h-24 flex items-center justify-center border-b border-transparent">
-                <h1 className="text-xl font-bold text-slate-800 text-center px-4">
-                    Quản lý bệnh viện
-                </h1>
+        <aside className="w-64 bg-white border-r border-slate-200 h-screen fixed left-0 top-0 overflow-y-auto z-50 flex flex-col transition-all duration-300">
+            {/* Header / Logo */}
+            <div className="p-6 flex items-center gap-3 border-b border-slate-100">
+                <div className="w-8 h-8 bg-gradient-to-tr from-blue-500 to-cyan-400 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/30">
+                    DH
+                </div>
+                <h1 className="text-base font-bold text-slate-800 tracking-wide">Hospital <span className="font-light opacity-70">Manager</span></h1>
             </div>
 
-            <div className="flex-1 overflow-y-auto py-2 px-4 space-y-6">
+            <div className="flex-1 py-2 px-4 space-y-6">
                 {MENUS.map((group, idx) => (
                     <div key={idx}>
                         {group.title && group.items.some(item => item.roles.includes(user.role)) && (
-                            <h3 className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 mt-2">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-3 mt-4">
                                 {group.title}
                             </h3>
                         )}
-
                         <div className="space-y-1">
-                            {group.items
-                                .filter(item => item.roles.includes(user.role))
-                                .map((item) => {
-                                    const isActive = location.pathname === item.path;
-                                    const Icon = item.icon;
-
-                                    return (
-                                        <Link
-                                            key={item.path}
-                                            to={item.path}
-                                            className={cn(
-                                                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                                                isActive
-                                                    ? "bg-slate-100 text-slate-900 font-semibold"
-                                                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                                            )}
-                                        >
-                                            <Icon size={18} strokeWidth={2} className={isActive ? "text-slate-900" : "text-slate-500"} />
-                                            {item.label}
-                                        </Link>
-                                    );
-                                })}
+                            {group.items.map((item, itemIdx) => {
+                                if (!item.roles.includes(user.role)) return null;
+                                const isActive = location.pathname === item.path;
+                                return (
+                                    <Link
+                                        key={itemIdx}
+                                        to={item.path}
+                                        className={`
+                                            flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
+                                            ${isActive
+                                                ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md shadow-blue-500/20"
+                                                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                            }
+                                        `}
+                                    >
+                                        <item.icon size={18} className={isActive ? "text-white" : "text-slate-400"} />
+                                        <span>{item.label}</span>
+                                    </Link>
+                                );
+                            })}
                         </div>
                     </div>
                 ))}
             </div>
 
-            {/* User Footer */}
-            <div className="p-4 border-t border-slate-100">
-                <div className="flex items-center gap-3 mb-4 px-2">
-                    <img
-                        src={user.avatar}
-                        alt="User"
-                        className="w-10 h-10 rounded-full bg-slate-100 object-cover border border-slate-200"
-                    />
+            {/* Footer User Info */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 shadow-sm">
+                        <User size={18} />
+                    </div>
                     <div className="overflow-hidden">
-                        <p className="text-sm font-medium text-slate-900 truncate">{user.name}</p>
+                        <p className="text-sm font-bold text-slate-800 truncate">{user.name}</p>
                         <p className="text-xs text-slate-500 truncate">{user.role}</p>
                     </div>
                 </div>

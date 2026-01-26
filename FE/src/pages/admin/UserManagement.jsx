@@ -75,12 +75,7 @@ const UserManagement = () => {
     // Search State
     const [searchTerm, setSearchTerm] = useState("");
 
-    // Create Form State
-    const [createForm, setCreateForm] = useState({
-        full_name: "", username: "", email: "", phone: "",
-        password: "", password_confirmation: "",
-        dept_id: "", roles: [], is_active: true
-    });
+
 
     const handleSearch = (e) => setSearchTerm(e.target.value.toLowerCase());
 

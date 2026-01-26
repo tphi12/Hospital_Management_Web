@@ -85,19 +85,7 @@ const DocumentList = () => {
         setTimeout(() => setSuccessMsg(""), 3000);
     };
 
-    const StatusBadge = ({ status }) => {
-        if (status === 'approved') return <span className="inline-block px-3 py-1 bg-gradient-to-tr from-green-400 to-green-600 text-white text-xs font-bold rounded shadow-sm">Đã duyệt</span>;
-        if (status === 'pending') return <span className="inline-block px-3 py-1 bg-gradient-to-tr from-yellow-400 to-yellow-600 text-white text-xs font-bold rounded shadow-sm">Chờ duyệt</span>;
-        if (status === 'rejected') return <span className="inline-block px-3 py-1 bg-gradient-to-tr from-red-400 to-red-600 text-white text-xs font-bold rounded shadow-sm">Từ chối</span>;
-        return null;
-    };
 
-    const FileIcon = ({ path }) => {
-        if (path.endsWith('.pdf')) return <FileText size={24} className="text-red-500" />;
-        if (path.endsWith('.xls') || path.endsWith('.xlsx')) return <FileText size={24} className="text-green-600" />;
-        if (path.endsWith('.doc') || path.endsWith('.docx')) return <FileText size={24} className="text-blue-600" />;
-        return <Folder size={24} className="text-amber-500" />;
-    };
 
     return (
         <div className="animate-fade-in relative">
@@ -332,6 +320,20 @@ const DetailRow = ({ label, value, colSpan = 12, isComponent, isTag }) => (
         )}
     </div>
 );
+
+const StatusBadge = ({ status }) => {
+    if (status === 'approved') return <span className="inline-block px-3 py-1 bg-gradient-to-tr from-green-400 to-green-600 text-white text-xs font-bold rounded shadow-sm">Đã duyệt</span>;
+    if (status === 'pending') return <span className="inline-block px-3 py-1 bg-gradient-to-tr from-yellow-400 to-yellow-600 text-white text-xs font-bold rounded shadow-sm">Chờ duyệt</span>;
+    if (status === 'rejected') return <span className="inline-block px-3 py-1 bg-gradient-to-tr from-red-400 to-red-600 text-white text-xs font-bold rounded shadow-sm">Từ chối</span>;
+    return null;
+};
+
+const FileIcon = ({ path }) => {
+    if (path.endsWith('.pdf')) return <FileText size={24} className="text-red-500" />;
+    if (path.endsWith('.xls') || path.endsWith('.xlsx')) return <FileText size={24} className="text-green-600" />;
+    if (path.endsWith('.doc') || path.endsWith('.docx')) return <FileText size={24} className="text-blue-600" />;
+    return <Folder size={24} className="text-amber-500" />;
+};
 
 const InputGroup = ({ label, value, onChange, readOnly, colSpan = 1 }) => (
     <div className={`col-span-1 md:col-span-${colSpan}`}>

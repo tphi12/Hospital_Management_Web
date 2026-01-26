@@ -264,7 +264,8 @@ const DepartmentManagement = () => {
 };
 
 // Reusable Modal Component since Create/Edit are very similar
-const DeptModal = ({ title, data, onClose, submitLabel, submitIcon: SubmitIcon, submitColor, isEdit }) => {
+const DeptModal = ({ title, data, onClose, submitLabel, submitIcon, submitColor, isEdit }) => {
+    const Icon = submitIcon;
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[1px] animate-fade-in">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl m-4 overflow-hidden animate-scale-in">
@@ -332,7 +333,7 @@ const DeptModal = ({ title, data, onClose, submitLabel, submitIcon: SubmitIcon, 
                         Hủy
                     </button>
                     <button className={`px-6 py-2 text-sm font-bold text-white rounded-lg hover:brightness-110 flex items-center gap-2 shadow-sm ${submitColor}`}>
-                        <SubmitIcon size={18} />
+                        <Icon size={18} />
                         {submitLabel}
                     </button>
                 </div>

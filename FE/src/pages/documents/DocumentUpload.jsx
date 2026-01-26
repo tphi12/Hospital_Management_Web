@@ -271,12 +271,12 @@ const DocumentUpload = () => {
                             <hr className="my-8 border-slate-100" />
 
                             {/* Info Box */}
-                            <div className="bg-slate-800 text-white rounded-lg p-4">
+                            <div className="bg-gradient-to-r from-sky-400 to-blue-500 text-white rounded-lg p-4 shadow-md">
                                 <h6 className="font-bold flex items-center gap-2 text-white mb-2">
-                                    <Info size={18} />
+                                    <Info size={19} />
                                     Hướng dẫn Upload Tài liệu
                                 </h6>
-                                <ul className="text-sm space-y-1 text-slate-300 list-disc pl-5">
+                                <ul className="text-sm space-y-1 text-white/90 list-disc pl-5">
                                     <li><strong>Cấu trúc lưu trữ:</strong> F:/[Phòng ban]/[Tổ]/[Tên file]</li>
                                     <li><strong>ID Tài liệu:</strong> Tự động tạo theo format [Mã PB]_[GiờPhútGiâyNgàyThángNăm]</li>
                                     <li><strong>Quyền sửa/xóa:</strong> Chỉ người tạo tài liệu</li>

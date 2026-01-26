@@ -1,37 +1,13 @@
-import { createContext, useState, useEffect } from "react";
-import { ROLES } from "../lib/roles";
-
-/**
- * @typedef {Object} User
- * @property {string} id
- * @property {string} name
- * @property {string} role
- * @property {string} department
- * @property {string} avatar
- */
-
-/**
- * @typedef {Object} AuthContextType
- * @property {User|null} user
- * @property {Function} login
- * @property {Function} logout
- * @property {boolean} isLoading
- */
-
-export const AuthContext = createContext(null);
+import { useState } from "react";
+import { AuthContext } from "./Context";
 
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
-
-    // Simulate picking up a session
-    useEffect(() => {
+    const [user, setUser] = useState(() => {
         const storedUser = localStorage.getItem("hms_user");
-        if (storedUser) {
-            setUser(JSON.parse(storedUser));
-        }
-        setIsLoading(false);
-    }, []);
+        return storedUser ? JSON.parse(storedUser) : null;
+    });
+    const isLoading = false;
+
 
     /**
      * Mock login function

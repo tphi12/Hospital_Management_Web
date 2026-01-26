@@ -14,7 +14,9 @@ import DepartmentManagement from "./pages/admin/DepartmentManagement";
 import DocumentUpload from "./pages/documents/DocumentUpload";
 import DocumentList from "./pages/documents/DocumentList";
 import { DocumentApprovals } from "./pages/documents/DocumentPages";
-import { MySchedule, DeptSchedule, MasterSchedule } from "./pages/schedule/SchedulePages";
+import { MySchedule } from "./pages/schedule/SchedulePages";
+import DutySchedule from "./pages/schedule/DutySchedule";
+import WeeklySchedule from "./pages/schedule/WeeklySchedule";
 
 function App() {
   return (
@@ -66,7 +68,7 @@ function App() {
           <Route
             path="/documents/upload"
             element={
-              <ProtectedRoute allowedRoles={[ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT]}>
+              <ProtectedRoute allowedRoles={[ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.ADMIN]}>
                 <DocumentUpload />
               </ProtectedRoute>
             }
@@ -92,7 +94,7 @@ function App() {
           <Route
             path="/schedule/me"
             element={
-              <ProtectedRoute allowedRoles={[ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.HOSPITAL_CLERK, ROLES.KHTH]}>
+              <ProtectedRoute allowedRoles={[ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.HOSPITAL_CLERK, ROLES.KHTH, ROLES.ADMIN]}>
                 <MySchedule />
               </ProtectedRoute>
             }
@@ -100,16 +102,24 @@ function App() {
           <Route
             path="/schedule/department"
             element={
-              <ProtectedRoute allowedRoles={[ROLES.DEPT_CLERK]}>
-                <DeptSchedule />
+              <ProtectedRoute allowedRoles={[ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.KHTH, ROLES.ADMIN]}>
+                <DutySchedule role="CLERK" />
               </ProtectedRoute>
             }
           />
           <Route
             path="/schedule/master"
             element={
-              <ProtectedRoute allowedRoles={[ROLES.KHTH, ROLES.ADMIN]}>
-                <MasterSchedule />
+              <ProtectedRoute allowedRoles={[ROLES.KHTH, ROLES.ADMIN, ROLES.STAFF, ROLES.HEAD_OF_DEPT, ROLES.DEPT_CLERK, ROLES.HOSPITAL_CLERK]}>
+                <DutySchedule role="ADMIN" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/schedule/weekly"
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.KHTH, ROLES.ADMIN, ROLES.STAFF, ROLES.HEAD_OF_DEPT, ROLES.DEPT_CLERK, ROLES.HOSPITAL_CLERK]}>
+                <WeeklySchedule role="ADMIN" />
               </ProtectedRoute>
             }
           />

@@ -64,7 +64,7 @@ const Dashboard = () => {
     const BAR_DATA = TABLE_DATA.map(item => ({
         name: item.name,
         docs: item.total
-    })).filter(item => item.docs > 0 || Math.random() > 0.5).slice(0, 8); // filtered for demo visuals
+    })).filter(item => item.docs >= 0).slice(0, 8);
 
     return (
         <div className="space-y-6 animate-fade-in">
