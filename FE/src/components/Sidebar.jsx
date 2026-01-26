@@ -144,15 +144,15 @@ const Sidebar = () => {
 
             {/* Footer User Info */}
             <div className="p-4 border-t border-slate-100 bg-slate-50">
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 shadow-sm">
-                        <User size={18} />
+                <Link to="/profile" className="flex items-center gap-3 mb-4 hover:bg-white p-2 rounded-lg transition-colors cursor-pointer group">
+                    <div className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 shadow-sm group-hover:border-blue-400">
+                        <User size={18} className="group-hover:text-blue-500" />
                     </div>
                     <div className="overflow-hidden">
-                        <p className="text-sm font-bold text-slate-800 truncate">{user.name}</p>
+                        <p className="text-sm font-bold text-slate-800 truncate group-hover:text-blue-600">{user.name}</p>
                         <p className="text-xs text-slate-500 truncate">{user.role}</p>
                     </div>
-                </div>
+                </Link>
                 <button
                     onClick={logout}
                     className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"

@@ -17,6 +17,7 @@ import { DocumentApprovals } from "./pages/documents/DocumentPages";
 import { MySchedule } from "./pages/schedule/SchedulePages";
 import DutySchedule from "./pages/schedule/DutySchedule";
 import WeeklySchedule from "./pages/schedule/WeeklySchedule";
+import Profile from "./pages/Profile";
 
 function App() {
   return (
@@ -42,6 +43,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <Unauthorized />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
               </ProtectedRoute>
             }
           />
