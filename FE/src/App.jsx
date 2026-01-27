@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import Unauthorized from "./pages/Unauthorized";
 import UserManagement from "./pages/admin/UserManagement";
 import DepartmentManagement from "./pages/admin/DepartmentManagement";
+import RoleManagement from "./pages/admin/RoleManagement";
 import DocumentUpload from "./pages/documents/DocumentUpload";
 import DocumentList from "./pages/documents/DocumentList";
 import { DocumentApprovals } from "./pages/documents/DocumentPages";
@@ -70,6 +71,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
                 <DepartmentManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/roles"
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
+                <RoleManagement />
               </ProtectedRoute>
             }
           />
