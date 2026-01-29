@@ -1,8 +1,37 @@
 import { useState } from "react";
 import {
-    Search, FileText, Eye, Download, Edit, X, File,
-    CheckCircle, AlertCircle, Clock, ShieldAlert, Folder
-} from "lucide-react";
+    SearchOutlined,
+    EyeOutlined,
+    DownloadOutlined,
+    EditOutlined,
+    FilePdfOutlined,
+    FileExcelOutlined,
+    FileWordOutlined,
+    FileOutlined,
+    CheckCircleOutlined,
+    CloseCircleOutlined,
+    ClockCircleOutlined
+} from "@ant-design/icons";
+import {
+    Table,
+    Button,
+    Input,
+    Tag,
+    Space,
+    Tooltip,
+    Modal,
+    Card,
+    Breadcrumb,
+    Typography,
+    message,
+    Form,
+    Row,
+    Col,
+    Descriptions
+} from "antd";
+
+const { Title, Text } = Typography;
+const { Search } = Input;
 
 /**
  * Mock Data
@@ -64,290 +93,206 @@ const MOCK_DOCS = [
 
 const DocumentList = () => {
     const [documents, setDocuments] = useState(MOCK_DOCS);
-    const [searchTerm, setSearchTerm] = useState("");
+    const [searchText, setSearchText] = useState("");
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [currentDoc, setCurrentDoc] = useState(null);
+    const [form] = Form.useForm();
 
-    // Modals
-    const [viewDoc, setViewDoc] = useState(null);
-    const [editDoc, setEditDoc] = useState(null);
-    const [successMsg, setSuccessMsg] = useState("");
-
-    const filteredDocs = documents.filter(doc =>
-        doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        doc.creator.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const handleUpdate = (e) => {
-        e.preventDefault();
-        // Update logic mock
-        setDocuments(documents.map(d => d.id === editDoc.id ? editDoc : d));
-        setEditDoc(null);
-        setSuccessMsg("Tài liệu đã được cập nhật thành công!");
-        setTimeout(() => setSuccessMsg(""), 3000);
+    const handleView = (doc) => {
+        setCurrentDoc(doc);
+        setIsViewModalOpen(true);
     };
 
+    const handleEdit = (doc) => {
+        setCurrentDoc(doc);
+        form.setFieldsValue(doc);
+        setIsEditModalOpen(true);
+    };
 
+    const handleUpdate = () => {
+        form.validateFields().then(values => {
+            setDocuments(documents.map(d => d.id === currentDoc.id ? { ...d, ...values } : d));
+            message.success("Cập nhật tài liệu thành công!");
+            setIsEditModalOpen(false);
+        });
+    };
+
+    const getFileIcon = (path) => {
+        if (path.endsWith('.pdf')) return <FilePdfOutlined className="text-red-500 text-xl" />;
+        if (path.endsWith('.xls') || path.endsWith('.xlsx')) return <FileExcelOutlined className="text-green-600 text-xl" />;
+        if (path.endsWith('.doc') || path.endsWith('.docx')) return <FileWordOutlined className="text-blue-600 text-xl" />;
+        return <FileOutlined className="text-orange-500 text-xl" />;
+    };
+
+    const getStatusTag = (status) => {
+        switch (status) {
+            case 'approved': return <Tag icon={<CheckCircleOutlined />} color="success">Đã duyệt</Tag>;
+            case 'pending': return <Tag icon={<ClockCircleOutlined />} color="warning">Chờ duyệt</Tag>;
+            case 'rejected': return <Tag icon={<CloseCircleOutlined />} color="error">Từ chối</Tag>;
+            default: return <Tag>{status}</Tag>;
+        }
+    };
+
+    const filteredData = documents.filter(doc =>
+        doc.title.toLowerCase().includes(searchText.toLowerCase()) ||
+        doc.creator.toLowerCase().includes(searchText.toLowerCase())
+    );
+
+    const columns = [
+        {
+            title: 'Tài liệu',
+            key: 'title',
+            render: (_, record) => (
+                <Space>
+                    {getFileIcon(record.file_path)}
+                    <div>
+                        <Text strong className="block">{record.title}</Text>
+                        <Text type="secondary" className="text-xs">{record.file_path}</Text>
+                    </div>
+                </Space>
+            ),
+        },
+        {
+            title: 'Người tạo',
+            dataIndex: 'creator',
+            key: 'creator',
+            render: (text) => <Text>{text}</Text>,
+        },
+        {
+            title: 'Phòng ban',
+            dataIndex: 'department',
+            key: 'department',
+        },
+        {
+            title: 'Ngày tạo',
+            dataIndex: 'created_at',
+            key: 'created_at',
+            align: 'center',
+        },
+        {
+            title: 'Trạng thái',
+            dataIndex: 'status',
+            key: 'status',
+            align: 'center',
+            render: (status) => getStatusTag(status),
+        },
+        {
+            title: 'Hành động',
+            key: 'action',
+            align: 'center',
+            render: (_, record) => (
+                <Space size="small">
+                    <Tooltip title="Xem chi tiết">
+                        <Button type="text" icon={<EyeOutlined />} className="text-blue-500" onClick={() => handleView(record)} />
+                    </Tooltip>
+                    <Tooltip title="Chỉnh sửa">
+                        <Button type="text" icon={<EditOutlined />} className="text-orange-500" onClick={() => handleEdit(record)} />
+                    </Tooltip>
+                    <Tooltip title="Tải xuống">
+                        <Button type="text" icon={<DownloadOutlined />} className="text-green-600" onClick={() => message.info(`Đang tải ${record.file_path}...`)} />
+                    </Tooltip>
+                </Space>
+            ),
+        },
+    ];
 
     return (
-        <div className="animate-fade-in relative">
-            {/* Breadcrumbs */}
-            <div className="flex items-center text-sm text-slate-500 mb-4">
-                <span>Trang chủ</span>
-                <span className="mx-2">/</span>
-                <span className="font-medium text-slate-900">Danh sách tài liệu</span>
-            </div>
+        <div className="space-y-4 h-[calc(100vh-80px)] flex flex-col">
+            <Breadcrumb
+                items={[
+                    { title: 'Trang chủ' },
+                    { title: 'Tài liệu' },
+                    { title: <span className="font-bold">Danh sách</span> },
+                ]}
+            />
 
-            <div className="row">
-                <div className="col-12">
-                    <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-                        {/* Header */}
-                        <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-4 shadow-lg">
-                            <h6 className="text-white font-bold mb-0">Danh sách tài liệu</h6>
-                        </div>
-
-                        <div className="p-0">
-                            {/* Alert */}
-                            {successMsg && (
-                                <div className="absolute top-4 right-4 z-50 bg-white border-l-4 border-green-500 shadow-lg rounded-r p-4 animate-slide-in-right flex items-center gap-3">
-                                    <CheckCircle className="text-green-500" size={24} />
-                                    <div>
-                                        <h6 className="font-bold text-slate-800">Thành công</h6>
-                                        <p className="text-sm text-slate-600">{successMsg}</p>
-                                    </div>
-                                    <button onClick={() => setSuccessMsg("")} className="ml-4 text-slate-400 hover:text-slate-600">
-                                        <X size={18} />
-                                    </button>
-                                </div>
-                            )}
-
-                            {/* Toolbar */}
-                            <div className="p-4 border-b border-slate-100">
-                                <div className="relative md:w-96">
-                                    <label className="block text-xs font-semibold text-slate-500 mb-1">Tìm kiếm tài liệu</label>
-                                    <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                                            <Search size={18} />
-                                        </div>
-                                        <input
-                                            type="text"
-                                            placeholder=""
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-md focus:outline-none focus:border-pink-500 text-sm transition-colors"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Table */}
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm text-left align-middle">
-                                    <thead className="bg-slate-50 text-xs uppercase text-slate-500 font-bold border-b border-slate-100">
-                                        <tr>
-                                            <th className="px-6 py-3">Tên tài liệu</th>
-                                            <th className="px-6 py-3">Người tạo</th>
-                                            <th className="px-6 py-3">Phòng ban</th>
-                                            <th className="px-6 py-3 text-center">Ngày tạo</th>
-                                            <th className="px-6 py-3 text-center">Trạng thái</th>
-                                            <th className="px-6 py-3 text-center">Hành động</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {filteredDocs.length > 0 ? filteredDocs.map((doc) => (
-                                            <tr key={doc.id} className="hover:bg-slate-50 transition-colors" data-doc-id={doc.id}>
-                                                <td className="px-6 py-3">
-                                                    <div className="flex items-center gap-3">
-                                                        <div><FileIcon path={doc.file_path} /></div>
-                                                        <div>
-                                                            <h6 className="text-sm font-semibold text-slate-900 mb-0">{doc.title}</h6>
-                                                            <p className="text-xs text-slate-500 mb-0">{doc.file_path}</p>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-3">
-                                                    <p className="text-xs font-semibold text-slate-700 mb-0">{doc.creator}</p>
-                                                </td>
-                                                <td className="px-6 py-3">
-                                                    <p className="text-xs font-semibold text-slate-700 mb-0">{doc.department}</p>
-                                                </td>
-                                                <td className="px-6 py-3 text-center">
-                                                    <span className="text-xs font-bold text-slate-600">{doc.created_at}</span>
-                                                </td>
-                                                <td className="px-6 py-3 text-center">
-                                                    <StatusBadge status={doc.status} />
-                                                </td>
-                                                <td className="px-6 py-3 text-center">
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <button
-                                                            onClick={() => setViewDoc(doc)}
-                                                            className="p-1.5 bg-cyan-50 text-cyan-500 rounded hover:bg-cyan-100 hover:scale-110 transition-all shadow-sm"
-                                                            title="Xem chi tiết"
-                                                        >
-                                                            <Eye size={18} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setEditDoc(doc)}
-                                                            className="p-1.5 bg-yellow-50 text-amber-500 rounded hover:bg-yellow-100 hover:scale-110 transition-all shadow-sm"
-                                                            title="Chỉnh sửa"
-                                                        >
-                                                            <Edit size={18} />
-                                                        </button>
-                                                        <button
-                                                            className="p-1.5 bg-green-50 text-green-500 rounded hover:bg-green-100 hover:scale-110 transition-all shadow-sm"
-                                                            title="Tải xuống"
-                                                            onClick={() => alert("Downloading " + doc.file_path)}
-                                                        >
-                                                            <Download size={18} />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )) : (
-                                            <tr>
-                                                <td colSpan="6" className="px-6 py-8 text-center text-slate-500">
-                                                    Không có tài liệu nào
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            {/* Pagination */}
-                            <div className="p-4 border-t border-slate-100 flex justify-center">
-                                <div className="flex gap-1 text-sm">
-                                    <button className="w-8 h-8 flex items-center justify-center border border-slate-200 rounded hover:bg-slate-50 text-slate-600">1</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+            <div className="flex justify-between items-center">
+                <div>
+                    <Title level={2} style={{ margin: 0 }}>Danh sách tài liệu</Title>
+                    <Text type="secondary">Quản lý và tra cứu tài liệu từ các khoa phòng.</Text>
                 </div>
             </div>
+
+            <Card bordered={false} className="shadow-sm flex-1 flex flex-col overflow-hidden" bodyStyle={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                    <Search
+                        placeholder="Tìm kiếm tài liệu..."
+                        allowClear
+                        enterButton={<SearchOutlined />}
+                        size="middle"
+                        onChange={(e) => setSearchText(e.target.value)}
+                        style={{ width: 400 }}
+                    />
+                </div>
+
+                <Table
+                    columns={columns}
+                    dataSource={filteredData}
+                    rowKey="id"
+                    pagination={{ pageSize: 8, position: ['bottomCenter'] }}
+                    scroll={{ y: 'calc(100vh - 300px)' }}
+                    className="flex-1"
+                />
+            </Card>
 
             {/* View Modal */}
-            {viewDoc && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[1px] animate-fade-in">
-                    <div className="bg-white rounded-lg shadow-2xl w-full max-w-3xl m-4 overflow-hidden animate-scale-in">
-                        <div className="bg-gradient-to-r from-cyan-500 to-blue-500 p-4 flex items-center justify-between">
-                            <h5 className="text-white font-bold flex items-center gap-2">
-                                <Eye size={20} /> Chi tiết tài liệu
-                            </h5>
-                            <button onClick={() => setViewDoc(null)} className="text-white/80 hover:text-white">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div className="p-6 grid grid-cols-1 md:grid-cols-12 gap-y-4 gap-x-6">
-                            <DetailRow label="Tên tài liệu" value={viewDoc.title} colSpan={12} />
-                            <DetailRow label="Phòng ban" value={viewDoc.department} colSpan={8} />
-                            <DetailRow label="Trạng thái" value={<StatusBadge status={viewDoc.status} />} colSpan={4} isComponent />
-                            <DetailRow label="Tổ / Bộ phận" value={viewDoc.section} colSpan={12} />
-                            <DetailRow label="Mô tả tài liệu" value={viewDoc.description} colSpan={12} />
-                            <DetailRow label="Từ khóa" value={viewDoc.keywords} colSpan={12} isTag />
-                            <DetailRow label="Định dạng file" value={viewDoc.format} colSpan={6} />
-                            <DetailRow label="ID Tài liệu" value={viewDoc.id} colSpan={6} />
-                        </div>
-                        <div className="p-4 border-t border-slate-100 flex justify-end bg-slate-50">
-                            <button onClick={() => setViewDoc(null)} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-medium rounded hover:bg-slate-50 shadow-sm">
-                                Đóng
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <Modal
+                title={<Space><EyeOutlined /> Chi tiết tài liệu</Space>}
+                open={isViewModalOpen}
+                onCancel={() => setIsViewModalOpen(false)}
+                footer={[
+                    <Button key="close" onClick={() => setIsViewModalOpen(false)}>Đóng</Button>
+                ]}
+                width={700}
+            >
+                {currentDoc && (
+                    <Descriptions bordered column={1} size="small" labelStyle={{ width: '150px', fontWeight: 'bold' }}>
+                        <Descriptions.Item label="ID Tài liệu">{currentDoc.id}</Descriptions.Item>
+                        <Descriptions.Item label="Tiêu đề">{currentDoc.title}</Descriptions.Item>
+                        <Descriptions.Item label="Phòng ban">{currentDoc.department}</Descriptions.Item>
+                        <Descriptions.Item label="Tổ / Bộ phận">{currentDoc.section}</Descriptions.Item>
+                        <Descriptions.Item label="Trạng thái">{getStatusTag(currentDoc.status)}</Descriptions.Item>
+                        <Descriptions.Item label="Định dạng">{currentDoc.format}</Descriptions.Item>
+                        <Descriptions.Item label="Mô tả">{currentDoc.description}</Descriptions.Item>
+                        <Descriptions.Item label="Từ khóa">
+                            {currentDoc.keywords.split(',').map((tag, i) => (
+                                <Tag key={i} color="blue">{tag.trim()}</Tag>
+                            ))}
+                        </Descriptions.Item>
+                    </Descriptions>
+                )}
+            </Modal>
 
             {/* Edit Modal */}
-            {editDoc && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[1px] animate-fade-in">
-                    <div className="bg-white rounded-lg shadow-2xl w-full max-w-3xl m-4 overflow-hidden animate-scale-in">
-                        <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-4 flex items-center justify-between">
-                            <h5 className="text-white font-bold flex items-center gap-2">
-                                <Edit size={20} /> Chỉnh sửa tài liệu
-                            </h5>
-                            <button onClick={() => setEditDoc(null)} className="text-white/80 hover:text-white">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <form onSubmit={handleUpdate}>
-                            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <InputGroup label="Tên tài liệu" value={editDoc.title} onChange={v => setEditDoc({ ...editDoc, title: v })} colSpan={2} />
-                                <InputGroup label="Phòng ban" value={editDoc.department} onChange={v => setEditDoc({ ...editDoc, department: v })} />
-                                <InputGroup label="Tổ / Bộ phận" value={editDoc.section} onChange={v => setEditDoc({ ...editDoc, section: v })} />
-                                <div className="md:col-span-2">
-                                    <label className="block text-sm font-semibold text-slate-700 mb-1">Mô tả tài liệu</label>
-                                    <textarea
-                                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
-                                        rows="3"
-                                        value={editDoc.description}
-                                        onChange={e => setEditDoc({ ...editDoc, description: e.target.value })}
-                                    />
-                                </div>
-                                <InputGroup label="Từ khóa" value={editDoc.keywords} onChange={v => setEditDoc({ ...editDoc, keywords: v })} colSpan={2} />
-                                <InputGroup label="Định dạng file" value={editDoc.format} readOnly />
-                                <InputGroup label="ID Tài liệu" value={editDoc.id} readOnly />
-                            </div>
-                            <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
-                                <button type="button" onClick={() => setEditDoc(null)} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-medium rounded hover:bg-slate-50 shadow-sm">
-                                    Hủy
-                                </button>
-                                <button type="submit" className="px-6 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold rounded shadow-md hover:shadow-lg transform active:scale-[0.98] transition-all">
-                                    Cập nhật
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
+            <Modal
+                title={<Space><EditOutlined /> Chỉnh sửa tài liệu</Space>}
+                open={isEditModalOpen}
+                onOk={handleUpdate}
+                onCancel={() => setIsEditModalOpen(false)}
+                okText="Cập nhật"
+                cancelText="Hủy"
+            >
+                <Form form={form} layout="vertical">
+                    <Form.Item name="title" label="Tên tài liệu" rules={[{ required: true }]}>
+                        <Input />
+                    </Form.Item>
+                    <Form.Item name="department" label="Phòng ban">
+                        <Input />
+                    </Form.Item>
+                    <Form.Item name="section" label="Tổ / Bộ phận">
+                        <Input />
+                    </Form.Item>
+                    <Form.Item name="description" label="Mô tả">
+                        <Input.TextArea rows={3} />
+                    </Form.Item>
+                    <Form.Item name="keywords" label="Từ khóa">
+                        <Input placeholder="Ngăn cách bằng dấu phẩy" />
+                    </Form.Item>
+                </Form>
+            </Modal>
         </div>
     );
 };
-
-// Helper Components
-const DetailRow = ({ label, value, colSpan = 12, isComponent, isTag }) => (
-    <div className={`col-span-12 md:col-span-${colSpan} flex flex-col md:flex-row md:items-start border-b border-slate-50 pb-2`}>
-        <span className="text-sm font-bold text-slate-800 w-32 shrink-0">{label}</span>
-        {isComponent ? (
-            <div className="mt-1 md:mt-0">{value}</div>
-        ) : isTag ? (
-            <div className="flex flex-wrap gap-1 mt-1 md:mt-0">
-                {value.split(',').map((tag, i) => (
-                    <span key={i} className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded border border-slate-200">
-                        {tag.trim()}
-                    </span>
-                ))}
-            </div>
-        ) : (
-            <span className="text-sm text-slate-600 mt-1 md:mt-0 font-medium">{value}</span>
-        )}
-    </div>
-);
-
-const StatusBadge = ({ status }) => {
-    if (status === 'approved') return <span className="inline-block px-3 py-1 bg-gradient-to-tr from-green-400 to-green-600 text-white text-xs font-bold rounded shadow-sm">Đã duyệt</span>;
-    if (status === 'pending') return <span className="inline-block px-3 py-1 bg-gradient-to-tr from-yellow-400 to-yellow-600 text-white text-xs font-bold rounded shadow-sm">Chờ duyệt</span>;
-    if (status === 'rejected') return <span className="inline-block px-3 py-1 bg-gradient-to-tr from-red-400 to-red-600 text-white text-xs font-bold rounded shadow-sm">Từ chối</span>;
-    return null;
-};
-
-const FileIcon = ({ path }) => {
-    if (path.endsWith('.pdf')) return <FileText size={24} className="text-red-500" />;
-    if (path.endsWith('.xls') || path.endsWith('.xlsx')) return <FileText size={24} className="text-green-600" />;
-    if (path.endsWith('.doc') || path.endsWith('.docx')) return <FileText size={24} className="text-blue-600" />;
-    return <Folder size={24} className="text-amber-500" />;
-};
-
-const InputGroup = ({ label, value, onChange, readOnly, colSpan = 1 }) => (
-    <div className={`col-span-1 md:col-span-${colSpan}`}>
-        <label className="block text-sm font-semibold text-slate-700 mb-1">{label}</label>
-        <input
-            type="text"
-            value={value}
-            onChange={e => onChange && onChange(e.target.value)}
-            readOnly={readOnly}
-            className={`w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none transition-colors
-                ${readOnly ? 'bg-slate-100 text-slate-500' : 'focus:border-orange-500 focus:ring-1 focus:ring-orange-500'}
-            `}
-        />
-    </div>
-);
 
 export default DocumentList;
