@@ -9,7 +9,7 @@ import {
     InfoCircleOutlined, UserAddOutlined
 } from "@ant-design/icons";
 
-/**
+/*
  * Mock Data
  */
 const MOCK_USERS = [

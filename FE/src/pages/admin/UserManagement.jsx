@@ -1,14 +1,35 @@
 import { useState } from "react";
 import {
-    Table, Button, Input, Modal, Form, Select, Tag, Space, Tooltip, message, Card, Breadcrumb, Switch, Avatar
+    Table,
+    Button,
+    Input,
+    Modal,
+    Form,
+    Select,
+    Tag,
+    Space,
+    Tooltip,
+    message,
+    Card,
+    Breadcrumb,
+    Switch,
+    Avatar,
+    Typography,
+    Row,
+    Col
 } from "antd";
 import {
-    PlusOutlined, EditOutlined, DeleteOutlined,
-    SearchOutlined, UserOutlined,
-    LockOutlined, UnlockOutlined,
-    ManOutlined, CheckCircleOutlined, CloseCircleOutlined
+    PlusOutlined,
+    EditOutlined,
+    DeleteOutlined,
+    SearchOutlined,
+    UserOutlined,
+    CheckCircleOutlined,
+    CloseCircleOutlined
 } from "@ant-design/icons";
-import { ROLES } from "../../lib/roles";
+import { ROLES, ROLE_DETAILS } from "../../lib/roles";
+
+const { Title, Text } = Typography;
 
 /**
  * Mock Data
@@ -16,62 +37,66 @@ import { ROLES } from "../../lib/roles";
 const INITIAL_USERS = [
     {
         id: 1,
-        name: "Trần Văn Trọng",
-        username: "trongtran",
-        email: "trong14122003@gmail.com",
-        avatar: "https://ui-avatars.com/api/?name=TV&background=random",
-        dept: "Chưa có phòng ban",
-        dept_id: "",
-        position: "Nhân viên",
-        roles: [],
+        name: "Nguyễn Văn Admin",
+        username: "admin",
+        email: "admin@hospital.com",
+        phone: "0901234567",
+        dept_id: 1,
+        dept: "Ban Giám Đốc",
+        position: "Quản trị viên",
+        roles: [ROLES.ADMIN],
         active: true,
-        status: "ĐANG HOẠT ĐỘNG",
-        phone: "0987654321"
+        avatar: "https://ui-avatars.com/api/?name=Nguyen+Van+Admin&background=random",
     },
     {
         id: 2,
-        name: "Trọng Trần",
-        username: "trongtran_bs",
-        email: "trong123@gmail.com",
-        avatar: "https://ui-avatars.com/api/?name=TT&background=random",
-        dept: "Khoa Sản",
-        dept_id: "khoa-san",
-        position: "Nhân viên",
-        roles: ["BÁC SĨ"],
-        active: false,
-        status: "ĐÃ KHÓA",
-        phone: "0123456789"
+        name: "Trần Thị Bác Sĩ",
+        username: "user1",
+        email: "bs.tran@hospital.com",
+        phone: "0912345678",
+        dept_id: 2,
+        dept: "Khoa Nội",
+        position: "Trưởng khoa",
+        roles: [ROLES.HEAD_OF_DEPT],
+        active: true,
+        avatar: "https://ui-avatars.com/api/?name=Tran+Thi+Bac+Si&background=random",
     },
     {
         id: 3,
-        name: "Lê Gia Nam",
-        username: "legianam",
-        email: "lenamhtkhus@gmail.com",
-        avatar: "https://ui-avatars.com/api/?name=LN&background=random",
-        dept: "Khoa Hình ảnh",
-        dept_id: "khoa-hinh-anh",
-        position: "Nhân viên",
-        roles: ["ADMIN"],
+        name: "Lê Văn Kế Toán",
+        username: "ketoan",
+        email: "ketoan@hospital.com",
+        phone: "0987654321",
+        dept_id: 3,
+        dept: "Phòng Tài Chính",
+        position: "Nhân viên Kế toán",
+        roles: [ROLES.STAFF],
+        active: false,
+        avatar: "https://ui-avatars.com/api/?name=Le+Van+Ke+Toan&background=random",
+    },
+    {
+        id: 4,
+        name: "Phạm Điều Dưỡng",
+        username: "nurse1",
+        email: "dieuduong@hospital.com",
+        phone: "0933333333",
+        dept_id: 2,
+        dept: "Khoa Nội",
+        position: "Thư ký khoa",
+        roles: [ROLES.DEPT_CLERK],
         active: true,
-        status: "ĐANG HOẠT ĐỘNG",
-        phone: "0999888777"
+        avatar: "https://ui-avatars.com/api/?name=Pham+Dieu+Duong&background=random",
     },
 ];
 
 const DEPARTMENTS = [
-    { id: "khoa-noi", name: "Khoa Nội" },
-    { id: "khoa-ngoai", name: "Khoa Ngoại" },
-    { id: "khoa-san", name: "Khoa Sản" },
-    { id: "khoa-hinh-anh", name: "Khoa Hình ảnh" },
-    { id: "phong-ky-thuat", name: "Phòng Kỹ Thuật" },
-];
-
-const ROLE_OPTIONS = [
-    { id: "ADMIN", name: "Admin" },
-    { id: "BÁC SĨ", name: "Bác sĩ" },
-    { id: "KẾ TOÁN", name: "Kế toán" },
-    { id: "HOSPITAL_CLERK", name: "Văn thư" },
-    { id: "HEAD_OF_DEPT", name: "Trưởng phòng" },
+    { id: 1, name: "Ban Giám Đốc" },
+    { id: 2, name: "Khoa Nội" },
+    { id: 3, name: "Phòng Tài Chính" },
+    { id: 4, name: "Khoa Ngoại" },
+    { id: 5, name: "Phòng Hành Chính" },
+    { id: 6, name: "Khoa Sản" },
+    { id: 7, name: "Khoa Hình ảnh" },
 ];
 
 const UserManagement = () => {
@@ -108,13 +133,12 @@ const UserManagement = () => {
             if (u.id === record.id) {
                 return {
                     ...u,
-                    active: newStatus,
-                    status: newStatus ? "ĐANG HOẠT ĐỘNG" : "ĐÃ KHÓA"
+                    active: newStatus
                 };
             }
             return u;
         }));
-        message.info(`Đã ${newStatus ? 'kích hoạt' : 'khóa'} tài khoản ${record.username}`);
+        message.success(`${newStatus ? 'Kích hoạt' : 'Khóa'} tài khoản ${record.username} thành công`);
     };
 
     const handleEdit = (record) => {
@@ -149,7 +173,6 @@ const UserManagement = () => {
                             ...u,
                             ...values,
                             dept: deptName,
-                            status: values.active ? "ĐANG HOẠT ĐỘNG" : "ĐÃ KHÓA"
                         };
                     }
                     return u;
@@ -162,7 +185,6 @@ const UserManagement = () => {
                     avatar: `https://ui-avatars.com/api/?name=${values.name}&background=random`,
                     dept: deptName,
                     position: "Nhân viên",
-                    status: values.active ? "ĐANG HOẠT ĐỘNG" : "ĐÃ KHÓA",
                     roles: values.roles || []
                 };
                 setUsers([...users, newUser]);
@@ -179,22 +201,22 @@ const UserManagement = () => {
             key: 'name',
             render: (text, record) => (
                 <Space>
-                    <Avatar src={record.avatar} shape="square" size="large" />
+                    <Avatar src={record.avatar} shape="square" size="large" icon={<UserOutlined />} />
                     <div>
-                        <div className="font-medium text-slate-900">{text}</div>
-                        <div className="text-xs text-slate-500">{record.email}</div>
+                        <Text strong className="block">{text}</Text>
+                        <Text type="secondary" className="text-xs">{record.email}</Text>
                     </div>
                 </Space>
             ),
         },
         {
-            title: 'Phòng Ban / Chức Vụ',
+            title: 'Phòng Ban',
             dataIndex: 'dept',
             key: 'dept',
             render: (text, record) => (
                 <div>
-                    <div className="font-medium text-slate-700">{text}</div>
-                    <div className="text-xs text-slate-500">{record.position}</div>
+                    <Text className="block">{text}</Text>
+                    <Text type="secondary" className="text-xs">{record.position}</Text>
                 </div>
             ),
         },
@@ -204,9 +226,14 @@ const UserManagement = () => {
             key: 'roles',
             render: (roles) => (
                 <Space wrap>
-                    {roles.length > 0 ? roles.map((role, idx) => (
-                        <Tag key={idx} color="blue">{role}</Tag>
-                    )) : <Tag color="default">Mặc định</Tag>}
+                    {roles.map((role, idx) => {
+                        const roleInfo = ROLE_DETAILS[role];
+                        return (
+                            <Tag key={idx} color={roleInfo ? "blue" : "default"}>
+                                {roleInfo ? roleInfo.label : role}
+                            </Tag>
+                        );
+                    })}
                 </Space>
             ),
         },
@@ -215,26 +242,23 @@ const UserManagement = () => {
             dataIndex: 'active',
             key: 'active',
             align: 'center',
-            render: (active) => (
-                <Tag icon={active ? <CheckCircleOutlined /> : <CloseCircleOutlined />} color={active ? "success" : "error"}>
-                    {active ? "Hoạt động" : "Đã khóa"}
-                </Tag>
+            render: (active, record) => (
+                <Switch
+                    checked={active}
+                    onChange={() => handleToggleStatus(record)}
+                    checkedChildren="Hoạt động"
+                    unCheckedChildren="Khóa"
+                />
             ),
         },
         {
             title: 'Hành Động',
             key: 'action',
+            align: 'center',
             render: (_, record) => (
                 <Space size="small">
                     <Tooltip title="Chỉnh sửa">
-                        <Button type="text" icon={<EditOutlined className="text-blue-600" />} onClick={() => handleEdit(record)} />
-                    </Tooltip>
-                    <Tooltip title={record.active ? "Khóa tài khoản" : "Mở khóa"}>
-                        <Button
-                            type="text"
-                            icon={record.active ? <LockOutlined className="text-orange-500" /> : <UnlockOutlined className="text-green-500" />}
-                            onClick={() => handleToggleStatus(record)}
-                        />
+                        <Button type="text" icon={<EditOutlined className="text-blue-500" />} onClick={() => handleEdit(record)} />
                     </Tooltip>
                     <Tooltip title="Xóa">
                         <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} />
@@ -249,133 +273,162 @@ const UserManagement = () => {
             <Breadcrumb
                 items={[
                     { title: 'Trang chủ' },
-                    { title: 'Quản trị hệ thống' },
-                    { title: <span className="font-bold">Người dùng</span> },
+                    { title: <span className="font-bold">Quản lý người dùng</span> },
                 ]}
             />
 
-            <Card
-                bordered={false}
-                className="shadow-sm rounded-lg"
-                title="Quản lý Người Dùng"
-                extra={
-                    <Space>
-                        <Input
-                            prefix={<SearchOutlined className="text-slate-400" />}
-                            placeholder="Tìm kiếm người dùng..."
-                            className="w-64"
-                            onChange={handleSearch}
-                        />
-                        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-                            Tạo tài khoản
-                        </Button>
-                    </Space>
-                }
-            >
+            <div className="flex justify-between items-center">
+                <div>
+                    <Title level={2} style={{ margin: 0 }}>
+                        <UserOutlined className="mr-2 text-blue-600" />
+                        Danh sách người dùng
+                    </Title>
+                    <Text type="secondary">Quản lý tài khoản, phân quyền và thông tin nhân sự.</Text>
+                </div>
+                <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate} size="large">
+                    Thêm người dùng
+                </Button>
+            </div>
+
+            <Card bordered={false} className="shadow-sm">
+                <div className="mb-4 flex justify-between">
+                    <Input
+                        prefix={<SearchOutlined className="text-slate-400" />}
+                        placeholder="Tìm kiếm theo tên, email..."
+                        className="w-full max-w-md"
+                        value={searchText}
+                        onChange={handleSearch}
+                        allowClear
+                        size="large"
+                    />
+                </div>
                 <Table
                     columns={columns}
                     dataSource={filteredUsers}
                     rowKey="id"
-                    pagination={{ pageSize: 6 }}
+                    pagination={{ pageSize: 8, position: ['bottomRight'] }}
                 />
             </Card>
 
             <Modal
-                title={editingUser ? "Chỉnh sửa Người dùng" : "Tạo Người dùng Mới"}
+                title={
+                    <div className="flex items-center gap-2 text-lg">
+                        {editingUser ? <EditOutlined className="text-blue-500" /> : <PlusOutlined className="text-blue-500" />}
+                        <span>{editingUser ? "Chỉnh sửa tài khoản" : "Tạo tài khoản mới"}</span>
+                    </div>
+                }
                 open={isModalOpen}
                 onOk={handleOk}
                 onCancel={() => setIsModalOpen(false)}
-                okText={editingUser ? "Cập nhật" : "Tạo mới"}
+                okText={editingUser ? "Lưu thay đổi" : "Tạo mới"}
                 cancelText="Hủy"
                 width={700}
+                centered
+                maskClosable={false}
             >
                 <Form
                     form={form}
                     layout="vertical"
                     className="mt-4"
                 >
-                    <div className="grid grid-cols-2 gap-4">
-                        <Form.Item
-                            name="name"
-                            label="Họ và tên"
-                            rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}
-                        >
-                            <Input prefix={<UserOutlined />} placeholder="Nhập họ tên" />
-                        </Form.Item>
-                        <Form.Item
-                            name="username"
-                            label="Tên đăng nhập"
-                            rules={[{ required: true, message: 'Vui lòng nhập username' }]}
-                        >
-                            <Input prefix={<UserOutlined />} placeholder="username" disabled={!!editingUser} />
-                        </Form.Item>
-                    </div>
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item
+                                name="name"
+                                label="Họ và tên"
+                                rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}
+                            >
+                                <Input prefix={<UserOutlined />} placeholder="Ví dụ: Nguyễn Văn A" />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item
+                                name="username"
+                                label="Tên đăng nhập"
+                                rules={[{ required: true, message: 'Vui lòng nhập username' }]}
+                            >
+                                <Input prefix={<UserOutlined />} placeholder="username" disabled={!!editingUser} />
+                            </Form.Item>
+                        </Col>
+                    </Row>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <Form.Item
-                            name="email"
-                            label="Email"
-                            rules={[{ required: true, type: 'email', message: 'Email không hợp lệ' }]}
-                        >
-                            <Input placeholder="example@gmail.com" />
-                        </Form.Item>
-                        <Form.Item
-                            name="phone"
-                            label="Số điện thoại"
-                        >
-                            <Input placeholder="09xxxx..." />
-                        </Form.Item>
-                    </div>
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item
+                                name="email"
+                                label="Email"
+                                rules={[{ required: true, type: 'email', message: 'Email không hợp lệ' }]}
+                            >
+                                <Input placeholder="example@gmail.com" />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item
+                                name="phone"
+                                label="Số điện thoại"
+                            >
+                                <Input placeholder="09xxxx..." />
+                            </Form.Item>
+                        </Col>
+                    </Row>
 
                     {!editingUser && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <Form.Item
-                                name="password"
-                                label="Mật khẩu"
-                                rules={[{ required: true, message: 'Vui lòng nhập mật khẩu' }]}
-                            >
-                                <Input.Password />
-                            </Form.Item>
-                            <Form.Item
-                                name="confirmPassword"
-                                label="Xác nhận mật khẩu"
-                                dependencies={['password']}
-                                rules={[
-                                    { required: true, message: 'Vui lòng xác nhận mật khẩu' },
-                                    ({ getFieldValue }) => ({
-                                        validator(_, value) {
-                                            if (!value || getFieldValue('password') === value) {
-                                                return Promise.resolve();
-                                            }
-                                            return Promise.reject(new Error('Mật khẩu không khớp!'));
-                                        },
-                                    }),
-                                ]}
-                            >
-                                <Input.Password />
-                            </Form.Item>
-                        </div>
+                        <Row gutter={16}>
+                            <Col span={12}>
+                                <Form.Item
+                                    name="password"
+                                    label="Mật khẩu"
+                                    rules={[{ required: true, message: 'Vui lòng nhập mật khẩu' }]}
+                                >
+                                    <Input.Password placeholder="******" />
+                                </Form.Item>
+                            </Col>
+                            <Col span={12}>
+                                <Form.Item
+                                    name="confirmPassword"
+                                    label="Xác nhận mật khẩu"
+                                    dependencies={['password']}
+                                    rules={[
+                                        { required: true, message: 'Vui lòng xác nhận mật khẩu' },
+                                        ({ getFieldValue }) => ({
+                                            validator(_, value) {
+                                                if (!value || getFieldValue('password') === value) {
+                                                    return Promise.resolve();
+                                                }
+                                                return Promise.reject(new Error('Mật khẩu không khớp!'));
+                                            },
+                                        }),
+                                    ]}
+                                >
+                                    <Input.Password placeholder="******" />
+                                </Form.Item>
+                            </Col>
+                        </Row>
                     )}
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <Form.Item name="dept_id" label="Phòng ban">
-                            <Select placeholder="Chọn phòng ban" allowClear>
-                                {DEPARTMENTS.map(d => (
-                                    <Select.Option key={d.id} value={d.id}>{d.name}</Select.Option>
-                                ))}
-                            </Select>
-                        </Form.Item>
-                        <Form.Item name="roles" label="Vai trò hệ thống">
-                            <Select mode="multiple" placeholder="Chọn vai trò" maxTagCount="responsive">
-                                {ROLE_OPTIONS.map(r => (
-                                    <Select.Option key={r.id} value={r.id}>{r.name}</Select.Option>
-                                ))}
-                            </Select>
-                        </Form.Item>
-                    </div>
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item name="dept_id" label="Phòng ban">
+                                <Select placeholder="Chọn phòng ban" allowClear>
+                                    {DEPARTMENTS.map(d => (
+                                        <Select.Option key={d.id} value={d.id}>{d.name}</Select.Option>
+                                    ))}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="roles" label="Vai trò hệ thống">
+                                <Select mode="multiple" placeholder="Chọn vai trò" maxTagCount="responsive">
+                                    {Object.values(ROLES).map(role => (
+                                        <Select.Option key={role} value={role}>{ROLE_DETAILS[role]?.label || role}</Select.Option>
+                                    ))}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
 
-                    <Form.Item name="active" valuePropName="checked" label="Trạng thái">
-                        <Switch checkedChildren="Hoạt động" unCheckedChildren="Đã khóa" />
+                    <Form.Item name="active" valuePropName="checked" label="Trạng thái tài khoản">
+                        <Switch checkedChildren="Đang hoạt động" unCheckedChildren="Đã khóa" />
                     </Form.Item>
 
                 </Form>

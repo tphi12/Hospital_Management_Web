@@ -100,26 +100,6 @@ const Sidebar = () => {
                     className="custom-sidebar-menu"
                 />
             </div>
-
-            {/* User Footer */}
-            <div className="p-4 border-t border-slate-100 bg-slate-50">
-                <div className="flex items-center gap-3 mb-4 px-2">
-                    <Avatar size="large" icon={<User size={20} />} className="bg-blue-100 text-blue-600" />
-                    <div className="overflow-hidden">
-                        <div className="font-semibold text-sm text-slate-800 truncate">{user.name}</div>
-                        <div className="text-xs text-slate-500 truncate">{user.role}</div>
-                    </div>
-                </div>
-                <Button
-                    danger
-                    block
-                    icon={<LogOut size={16} />}
-                    onClick={logout}
-                    className="flex items-center justify-center gap-2"
-                >
-                    Đăng xuất
-                </Button>
-            </div>
         </aside>
     );
 };
