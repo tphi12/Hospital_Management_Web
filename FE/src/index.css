@@ -2,8 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  body {
-    @apply bg-slate-50 text-slate-900;
-  }
+/* Ant Design overrides or global tweaks can go here */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #f0f2f5;
+  /* Ant Design Default Layout Background */
 }

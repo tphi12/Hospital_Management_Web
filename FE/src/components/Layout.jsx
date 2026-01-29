@@ -1,31 +1,39 @@
 import { Outlet } from "react-router-dom";
+import { Layout as AntLayout } from "antd";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
-import hospitalLogoLarge from "../assets/hospital-logo-large.png";
+
+const { Content, Sider } = AntLayout;
 
 const Layout = () => {
     return (
-        <div className="min-h-screen bg-slate-50 flex relative overflow-hidden">
-            {/* Decorative Background Watermark */}
-            <div className="fixed bottom-0 right-0 p-0 z-0 opacity-[0.03] pointer-events-none">
-                <img src={hospitalLogoLarge} alt="Watermark" className="w-[500px] h-[500px] object-contain translate-x-1/4 translate-y-1/4 grayscale" />
-            </div>
+        <AntLayout style={{ minHeight: "100vh" }}>
+            <Sider
+                width={260}
+                theme="light"
+                style={{
+                    overflow: 'auto',
+                    height: '100vh',
+                    position: 'fixed',
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    zIndex: 50,
+                    borderRight: '1px solid #f0f0f0'
+                }}
+            >
+                <Sidebar />
+            </Sider>
 
-            {/* Sidebar - Fixed width */}
-            <Sidebar />
-
-            {/* Main Content Area */}
-            <div className="flex-1 flex flex-col pl-64 transition-all relative z-10">
+            <AntLayout style={{ marginLeft: 260, transition: 'all 0.2s' }}>
                 <Navbar />
-
-                {/* Page Content */}
-                <main className="flex-1 p-6 overflow-y-auto">
-                    <div className="max-w-7xl mx-auto">
+                <Content style={{ margin: '24px 24px', overflow: 'initial' }}>
+                    <div style={{ padding: 24, background: '#fff', borderRadius: 8, minHeight: 360 }}>
                         <Outlet />
                     </div>
-                </main>
-            </div>
-        </div>
+                </Content>
+            </AntLayout>
+        </AntLayout>
     );
 };
 

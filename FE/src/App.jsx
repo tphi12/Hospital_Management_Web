@@ -20,132 +20,143 @@ import DutySchedule from "./pages/schedule/DutySchedule";
 import WeeklySchedule from "./pages/schedule/WeeklySchedule";
 import Profile from "./pages/Profile";
 
+import { ConfigProvider } from "antd";
+
 function App() {
   return (
-    <AuthProvider>
-      <Routes>
-        <Route path="/login" element={<Login />} />
+    <ConfigProvider
+      theme={{
+        token: {
+          colorPrimary: '#1677ff', // Ant Design v5 default blue
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+        },
+      }}
+    >
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
 
-        {/* Protected Routes Wrapper */}
-        <Route element={<Layout />}>
+          {/* Protected Routes Wrapper */}
+          <Route element={<Layout />}>
 
-          {/* Public inside app (but authenticated) */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
+            {/* Public inside app (but authenticated) */}
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/unauthorized"
-            element={
-              <ProtectedRoute>
-                <Unauthorized />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/unauthorized"
+              element={
+                <ProtectedRoute>
+                  <Unauthorized />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Admin Routes */}
-          <Route
-            path="/admin/users"
-            element={
-              <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
-                <UserManagement />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/departments"
-            element={
-              <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
-                <DepartmentManagement />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/roles"
-            element={
-              <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
-                <RoleManagement />
-              </ProtectedRoute>
-            }
-          />
+            {/* Admin Routes */}
+            <Route
+              path="/admin/users"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
+                  <UserManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/departments"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
+                  <DepartmentManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/roles"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
+                  <RoleManagement />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Document Routes */}
-          <Route
-            path="/documents/upload"
-            element={
-              <ProtectedRoute allowedRoles={[ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.ADMIN]}>
-                <DocumentUpload />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/documents/approvals"
-            element={
-              <ProtectedRoute allowedRoles={[ROLES.HEAD_OF_DEPT]}>
-                <DocumentApprovals />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/documents/repository"
-            element={
-              <ProtectedRoute allowedRoles={[ROLES.HOSPITAL_CLERK, ROLES.ADMIN, ROLES.HEAD_OF_DEPT, ROLES.STAFF]}>
-                <DocumentList />
-              </ProtectedRoute>
-            }
-          />
+            {/* Document Routes */}
+            <Route
+              path="/documents/upload"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.ADMIN]}>
+                  <DocumentUpload />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/documents/approvals"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.HEAD_OF_DEPT]}>
+                  <DocumentApprovals />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/documents/repository"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.HOSPITAL_CLERK, ROLES.ADMIN, ROLES.HEAD_OF_DEPT, ROLES.STAFF]}>
+                  <DocumentList />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Schedule Routes */}
-          <Route
-            path="/schedule/me"
-            element={
-              <ProtectedRoute allowedRoles={[ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.HOSPITAL_CLERK, ROLES.KHTH, ROLES.ADMIN]}>
-                <MySchedule />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/schedule/department"
-            element={
-              <ProtectedRoute allowedRoles={[ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.KHTH, ROLES.ADMIN]}>
-                <DutySchedule role="CLERK" />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/schedule/master"
-            element={
-              <ProtectedRoute allowedRoles={[ROLES.KHTH, ROLES.ADMIN, ROLES.STAFF, ROLES.HEAD_OF_DEPT, ROLES.DEPT_CLERK, ROLES.HOSPITAL_CLERK]}>
-                <DutySchedule role="ADMIN" />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/schedule/weekly"
-            element={
-              <ProtectedRoute allowedRoles={[ROLES.KHTH, ROLES.ADMIN, ROLES.STAFF, ROLES.HEAD_OF_DEPT, ROLES.DEPT_CLERK, ROLES.HOSPITAL_CLERK]}>
-                <WeeklySchedule role="ADMIN" />
-              </ProtectedRoute>
-            }
-          />
+            {/* Schedule Routes */}
+            <Route
+              path="/schedule/me"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.HOSPITAL_CLERK, ROLES.KHTH, ROLES.ADMIN]}>
+                  <MySchedule />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/schedule/department"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.KHTH, ROLES.ADMIN]}>
+                  <DutySchedule role="CLERK" />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/schedule/master"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.KHTH, ROLES.ADMIN, ROLES.STAFF, ROLES.HEAD_OF_DEPT, ROLES.DEPT_CLERK, ROLES.HOSPITAL_CLERK]}>
+                  <DutySchedule role="ADMIN" />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/schedule/weekly"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.KHTH, ROLES.ADMIN, ROLES.STAFF, ROLES.HEAD_OF_DEPT, ROLES.DEPT_CLERK, ROLES.HOSPITAL_CLERK]}>
+                  <WeeklySchedule role="ADMIN" />
+                </ProtectedRoute>
+              }
+            />
 
-        </Route>
-      </Routes>
-    </AuthProvider>
+          </Route>
+        </Routes>
+      </AuthProvider>
+    </ConfigProvider>
   );
 }
 
