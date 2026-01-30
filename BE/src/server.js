@@ -60,6 +60,7 @@ swaggerSetup(app);
 // Health check routes (public access)
 app.use('/health', healthRoutes);
 app.use('/api/health', healthRoutes);
+app.use('/api/api/health', healthRoutes); // Fix cho trường hợp double prefix
 
 // API routes
 app.use('/api/auth', authRoutes);
