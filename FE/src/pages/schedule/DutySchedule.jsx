@@ -1,59 +1,11 @@
 import { Calendar, Download, Send, CheckCircle, Printer, Save, Edit } from "lucide-react";
 
+import { DUTY_DATA } from "../../lib/mockScheduleData";
+
 /**
  * MOCK DATA
  */
-const DUTY_DATA = [
-    {
-        day: "Thứ 2", date: "04/08",
-        leader: "BS Tân",
-        doctors: { general: "BS Thủy", obs: "BS Xuân", cdha: "BS Trang", hscc: "BS Tâm", internal: "BS Hòa" },
-        nurses: { lck: "ĐD Tâm", surgery: "ĐD Huyền", obs: "ĐD Trang", lab: "KTV Huyên", cdha: "KTV Tuấn" },
-        others: { cashier: "Yến" }
-    },
-    {
-        day: "Thứ 3", date: "05/08",
-        leader: "BS Huy",
-        doctors: { general: "BS Dân", obs: "BS Lệ", cdha: "BS Hoàng", hscc: "BS Việt", internal: "BS Lê" },
-        nurses: { lck: "ĐD Bé", surgery: "ĐD Hoài", obs: "ĐD Hiếu", lab: "KTV Phi", cdha: "KTV Tiến" },
-        others: { cashier: "Tuyết" }
-    },
-    {
-        day: "Thứ 4", date: "06/08",
-        leader: "BS Tân",
-        doctors: { general: "BS Tuấn", obs: "BS Hải", cdha: "BS Trang", hscc: "BS Tuyên", internal: "BS Liên" },
-        nurses: { lck: "ĐD Thiện", surgery: "ĐD Đào", obs: "ĐD Ly", lab: "KTV Trang", cdha: "KTV Huy" },
-        others: { cashier: "Hiền" }
-    },
-    {
-        day: "Thứ 5", date: "07/08",
-        leader: "BS Huy",
-        doctors: { general: "BS Thiện", obs: "BS Khôi", cdha: "BS Linh", hscc: "BS Thủy", internal: "BS Huệ" },
-        nurses: { lck: "ĐD Hằng", surgery: "ĐD Huyền", obs: "ĐD Trang", lab: "KTV Hiếu", cdha: "KTV Quỳnh" },
-        others: { cashier: "Yến" }
-    },
-    {
-        day: "Thứ 6", date: "08/08",
-        leader: "BS Tân",
-        doctors: { general: "BS Tuấn", obs: "BS Nhung", cdha: "BS Mạnh", hscc: "BS Tuyên", internal: "BS Hòa" },
-        nurses: { lck: "ĐD N.Anh", surgery: "ĐD Hằng", obs: "ĐD Hiếu", lab: "KTV Trang", cdha: "KTV Tuấn" },
-        others: { cashier: "Tuyết" }
-    },
-    {
-        day: "Thứ 7", date: "09/08",
-        leader: "BS Huy",
-        doctors: { general: "BS Thủy", obs: "BS Luật", cdha: "BS Mạnh", hscc: "BS Việt", internal: "BS Lê" },
-        nurses: { lck: "ĐD Tâm", surgery: "ĐD Đào", obs: "ĐD Ly", lab: "KTV Huyên", cdha: "KTV Tiến" },
-        others: { cashier: "Hiền" }
-    },
-    {
-        day: "CN", date: "10/08",
-        leader: "BS Dân",
-        doctors: { general: "BS Dân", obs: "BS Lệ", cdha: "BS Linh", hscc: "BS Tuyên", internal: "BS Liên" },
-        nurses: { lck: "ĐD Bé", surgery: "ĐD Huyền", obs: "ĐD Trang", lab: "KTV Phi", cdha: "KTV Huy" },
-        others: { cashier: "Dân" }
-    },
-];
+// DUTY_DATA imported from shared lib
 
 const DutySchedule = ({ role = "VIEWER" }) => {
     // const [status, setStatus] = useState("PUBLISHED"); // DRAFT | PENDING | PUBLISHED

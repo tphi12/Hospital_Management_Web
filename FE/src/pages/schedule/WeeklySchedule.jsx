@@ -1,18 +1,12 @@
 import { useState } from "react";
 import { Calendar, Printer, Edit, Save, Plus } from "lucide-react";
 
+import { INITIAL_WEEKLY_DATA } from "../../lib/mockScheduleData";
+
 /**
  * MOCK DATA
  */
-const INITIAL_WEEKLY_DATA = [
-    { day: "Thứ 2", date: "04/08", morning: "07H: BGĐ tham gia giao ban chuyên môn với các khoa - Bs Tân (Khoa YHCT), Bs Tuấn (Phòng khám).", afternoon: "Làm công tác chuyên môn" },
-    { day: "Thứ 3", date: "05/08", morning: "07H: BGĐ tham gia giao ban chuyên môn với các khoa - Bs Tân (Khoa HSCC), Bs Tuấn (XN).", afternoon: "Làm công tác chuyên môn" },
-    { day: "Thứ 4", date: "06/08", morning: "07H: BGĐ tham gia giao ban chuyên môn với các khoa - Bs Tân (Khoa Sản), Bs Tuấn (CĐHA).", afternoon: "Làm công tác chuyên môn" },
-    { day: "Thứ 5", date: "07/08", morning: "Làm công tác chuyên môn", afternoon: "Làm công tác chuyên môn" },
-    { day: "Thứ 6", date: "08/08", morning: "Làm công tác chuyên môn", afternoon: "16H: Giao ban chuyên môn, Chủ trì: BS Nguyễn Bá Tân (GĐBV)." },
-    { day: "Thứ 7", date: "09/08", morning: "Làm công tác chuyên môn", afternoon: "Làm công tác chuyên môn" },
-    { day: "CN", date: "10/08", morning: "Làm công tác chuyên môn", afternoon: "Làm công tác chuyên môn" },
-];
+// INITIAL_WEEKLY_DATA imported from shared lib
 
 const WeeklySchedule = ({ role = "VIEWER" }) => {
     const [data, setData] = useState(INITIAL_WEEKLY_DATA);

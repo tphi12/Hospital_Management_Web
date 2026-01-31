@@ -15,7 +15,7 @@ import RoleManagement from "./pages/admin/RoleManagement";
 import DocumentUpload from "./pages/documents/DocumentUpload";
 import DocumentList from "./pages/documents/DocumentList";
 import { DocumentApprovals } from "./pages/documents/DocumentPages";
-import { MySchedule } from "./pages/schedule/SchedulePages";
+import MySchedule from "./pages/schedule/MySchedule";
 import DutySchedule from "./pages/schedule/DutySchedule";
 import WeeklySchedule from "./pages/schedule/WeeklySchedule";
 import Profile from "./pages/Profile";

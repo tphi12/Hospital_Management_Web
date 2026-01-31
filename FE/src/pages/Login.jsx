@@ -43,10 +43,19 @@ const Login = () => {
     };
 
     return (
-        <div className="min-h-screen w-full flex items-center justify-center bg-[#f0f2f5] p-4">
+        <div
+            className="min-h-screen w-full flex items-center justify-center p-4 relative bg-cover bg-center"
+            style={{
+                backgroundImage: 'url("https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?q=80&w=2600&auto=format&fit=crop")',
+            }}
+        >
+            {/* Overlay */}
+            <div className="absolute inset-0 bg-blue-900/40 backdrop-blur-[2px] z-0"></div>
+
             <Card
-                className="w-full max-w-md shadow-lg rounded-xl"
+                className="w-full max-w-md shadow-2xl rounded-xl z-10 border-0"
                 bordered={false}
+                styles={{ body: { padding: '2.5rem' } }}
             >
                 <div className="text-center mb-8">
                     <img
@@ -82,6 +91,7 @@ const Login = () => {
                         <Input
                             prefix={<UserOutlined className="text-slate-400" />}
                             placeholder="Tài khoản"
+                            className="rounded-lg"
                         />
                     </Form.Item>
 
@@ -92,6 +102,7 @@ const Login = () => {
                         <Input.Password
                             prefix={<LockOutlined className="text-slate-400" />}
                             placeholder="Mật khẩu"
+                            className="rounded-lg"
                         />
                     </Form.Item>
 
@@ -100,7 +111,7 @@ const Login = () => {
                             <Checkbox>Ghi nhớ đăng nhập</Checkbox>
                         </Form.Item>
 
-                        <a className="float-right text-blue-500 hover:text-blue-700" href="#">
+                        <a className="float-right text-blue-600 hover:text-blue-800 font-medium" href="#">
                             Quên mật khẩu?
                         </a>
                     </Form.Item>
@@ -109,7 +120,7 @@ const Login = () => {
                         <Button
                             type="primary"
                             htmlType="submit"
-                            className="w-full h-12 text-base font-semibold rounded-lg bg-[#1677ff]"
+                            className="w-full h-12 text-base font-bold rounded-lg bg-blue-600 hover:bg-blue-700 shadow-md"
                             loading={isLoading}
                             icon={!isLoading && <LoginOutlined />}
                         >
