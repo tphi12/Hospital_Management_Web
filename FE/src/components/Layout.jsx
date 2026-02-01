@@ -7,28 +7,19 @@ const { Content, Sider } = AntLayout;
 
 const Layout = () => {
     return (
-        <AntLayout style={{ minHeight: "100vh" }}>
+        <AntLayout className="min-h-screen bg-background">
             <Sider
                 width={260}
                 theme="light"
-                style={{
-                    overflow: 'auto',
-                    height: '100vh',
-                    position: 'fixed',
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    zIndex: 50,
-                    borderRight: '1px solid #f0f0f0'
-                }}
+                className="h-screen fixed left-0 top-0 bottom-0 z-50 border-r border-slate-200"
             >
                 <Sidebar />
             </Sider>
 
-            <AntLayout style={{ marginLeft: 260, transition: 'all 0.2s' }}>
+            <AntLayout className="ml-[260px] transition-all duration-200 bg-background">
                 <Navbar />
-                <Content style={{ margin: '24px 24px', overflow: 'initial' }}>
-                    <div style={{ padding: 24, background: '#fff', borderRadius: 8, minHeight: 360 }}>
+                <Content className="m-6 overflow-initial">
+                    <div className="p-6 bg-surface rounded-lg min-h-[360px] shadow-sm">
                         <Outlet />
                     </div>
                 </Content>

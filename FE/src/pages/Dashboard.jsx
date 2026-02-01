@@ -34,10 +34,10 @@ const Dashboard = () => {
 
     // Mock Data
     const STATS = [
-        { label: "Người Dùng", value: 16, sub: "+0 mới", icon: <UserOutlined />, color: "#1677ff", bg: "#e6f4ff" },
-        { label: "Phòng Ban", value: 11, sub: "100% hoạt động", icon: <BankOutlined />, color: "#52c41a", bg: "#f6ffed" },
-        { label: "Tài Liệu", value: 12, sub: "+0 mới", icon: <FileTextOutlined />, color: "#faad14", bg: "#fffbe6" },
-        { label: "Lịch Trực", value: 0, sub: "0/0 đã gửi", icon: <CalendarOutlined />, color: "#eb2f96", bg: "#fff0f6" },
+        { label: "Người Dùng", value: 16, sub: "+0 mới", icon: <UserOutlined />, color: "#0891b2", bg: "#ecfeff" }, // primary
+        { label: "Phòng Ban", value: 11, sub: "100% hoạt động", icon: <BankOutlined />, color: "#10b981", bg: "#ecfdf5" }, // emerald
+        { label: "Tài Liệu", value: 12, sub: "+0 mới", icon: <FileTextOutlined />, color: "#f59e0b", bg: "#fffbeb" }, // amber
+        { label: "Lịch Trực", value: 0, sub: "0/0 đã gửi", icon: <CalendarOutlined />, color: "#f43f5e", bg: "#fff1f2" }, // rose
     ];
 
     const TABLE_DATA = [
@@ -51,17 +51,17 @@ const Dashboard = () => {
     ];
 
     const DOC_TYPES = [
-        { name: 'WORD', count: 1, color: "#1890ff", icon: <FileWordOutlined /> },
-        { name: 'EXCEL', count: 1, color: "#52c41a", icon: <FileExcelOutlined /> },
-        { name: 'PDF', count: 8, color: "#f5222d", icon: <FilePdfOutlined /> },
-        { name: 'IMAGE', count: 0, color: "#faad14", icon: <FileImageOutlined /> },
+        { name: 'WORD', count: 1, color: "#3b82f6", icon: <FileWordOutlined /> }, // blue
+        { name: 'EXCEL', count: 1, color: "#10b981", icon: <FileExcelOutlined /> }, // emerald
+        { name: 'PDF', count: 8, color: "#f43f5e", icon: <FilePdfOutlined /> }, // rose
+        { name: 'IMAGE', count: 0, color: "#f59e0b", icon: <FileImageOutlined /> }, // amber
     ];
 
     const PIE_DATA = [
-        { name: 'Word', value: 1, color: '#1890ff' },
-        { name: 'Excel', value: 1, color: '#52c41a' },
-        { name: 'PDF', value: 8, color: '#f5222d' },
-        { name: 'Image', value: 0, color: '#faad14' },
+        { name: 'Word', value: 1, color: '#3b82f6' },
+        { name: 'Excel', value: 1, color: '#10b981' },
+        { name: 'PDF', value: 8, color: '#f43f5e' },
+        { name: 'Image', value: 0, color: '#f59e0b' },
     ];
 
     const BAR_DATA = TABLE_DATA.map(item => ({
@@ -191,7 +191,7 @@ const Dashboard = () => {
                                         <XAxis dataKey="name" hide />
                                         <YAxis />
                                         <RechartsTooltip />
-                                        <Bar dataKey="docs" fill="#1677ff" radius={[4, 4, 0, 0]} />
+                                        <Bar dataKey="docs" fill="#0891b2" radius={[4, 4, 0, 0]} />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>

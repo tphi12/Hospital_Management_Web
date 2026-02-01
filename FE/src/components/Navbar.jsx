@@ -95,19 +95,7 @@ const Navbar = () => {
     };
 
     return (
-        <Header
-            style={{
-                padding: '0 24px',
-                background: colorBgContainer,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                position: 'sticky',
-                top: 0,
-                zIndex: 40,
-                boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03)'
-            }}
-        >
+        <Header className="px-6 bg-white flex items-center justify-between sticky top-0 z-40 shadow-sm border-b border-slate-100 h-16 w-full">
             {/* Breadcrumb */}
             <Breadcrumb items={getBreadcrumbItems()} />
 
@@ -116,14 +104,14 @@ const Navbar = () => {
                 <Button type="text" shape="circle" icon={<SettingOutlined />} />
 
                 <Dropdown menu={notifMenuProps} trigger={['click']} placement="bottomRight">
-                    <Badge dot>
+                    <Badge dot color="cyan">
                         <Button type="text" shape="circle" icon={<BellOutlined />} />
                     </Badge>
                 </Dropdown>
 
                 <Dropdown menu={userMenuProps} trigger={['click']}>
                     <Space className="cursor-pointer hover:bg-slate-50 p-1.5 rounded-full transition-colors">
-                        <Avatar icon={<UserOutlined />} className="bg-blue-100 text-blue-600" />
+                        <Avatar icon={<UserOutlined />} className="bg-cyan-100 text-cyan-600" />
                         <span className="text-sm font-medium text-slate-700 hidden sm:inline-block">
                             {user?.name || "Tài khoản"}
                         </span>

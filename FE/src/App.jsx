@@ -27,7 +27,7 @@ function App() {
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: '#1677ff', // Ant Design v5 default blue
+          colorPrimary: '#0891b2', // Matching Tailwind primary (cyan-600)
           fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
         },
       }}

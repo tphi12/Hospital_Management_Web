@@ -97,7 +97,7 @@ const Sidebar = () => {
                     items={menuItems}
                     onClick={({ key }) => navigate(key)}
                     style={{ borderRight: 0 }}
-                    className="custom-sidebar-menu"
+                    className="custom-sidebar-menu text-slate-600"
                 />
             </div>
         </aside>

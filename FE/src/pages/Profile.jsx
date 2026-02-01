@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import {
     UserOutlined, MailOutlined, PhoneOutlined, EnvironmentOutlined,
@@ -186,14 +186,30 @@ const Profile = () => {
     );
 };
 
-const InfoItem = ({ icon, label, value }) => (
-    <div className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
-        <Space className="text-slate-500">
-            {icon}
-            <span>{label}</span>
-        </Space>
-        <span className="font-medium text-slate-800">{value}</span>
-    </div>
-);
+const InfoItem = ({ icon, label, value }) => {
+    // Safely render value
+    const renderValue = () => {
+        try {
+            if (!value) return "Chưa cập nhật";
+            if (React.isValidElement(value)) return value;
+            if (typeof value === 'object') return JSON.stringify(value);
+            return String(value);
+        } catch (e) {
+            return "Error";
+        }
+    };
+
+    return (
+        <div className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+            <div className="flex items-center gap-2 text-slate-500">
+                {icon}
+                <span>{label}</span>
+            </div>
+            <span className="font-medium text-slate-800">
+                {renderValue()}
+            </span>
+        </div>
+    );
+};
 
 export default Profile;
