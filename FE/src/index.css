@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Ant Design overrides or global tweaks can go here */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #f0f2f5;
+  /* Ant Design Default Layout Background */
+}
