@@ -33,7 +33,7 @@ export const authService = {
     try {
       await api.get('/auth/profile');
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   },

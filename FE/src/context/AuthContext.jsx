@@ -37,7 +37,7 @@ export const AuthProvider = ({ children }) => {
                         setUser(normalized);
                         localStorage.setItem("user", JSON.stringify(normalized));
                     }
-                } catch (error) {
+                } catch {
                     // Token không hợp lệ, xóa đi
                     localStorage.removeItem("token");
                     localStorage.removeItem("user");
@@ -45,7 +45,7 @@ export const AuthProvider = ({ children }) => {
             }
         };
         validateToken();
-    }, []);
+    }, [user]);
 
     /**
      * Login function - call API

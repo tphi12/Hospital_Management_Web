@@ -26,7 +26,7 @@ const Login = () => {
             } else {
                 setErrorMsg(result.message);
             }
-        } catch (error) {
+        } catch {
             setErrorMsg("Có lỗi xảy ra. Vui lòng thử lại!");
         } finally {
             setIsLoading(false);
