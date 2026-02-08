@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
-    Table, Button, Input, Modal, Form, Select, Tag, Space, Tooltip, message, Card, Breadcrumb
+    Table, Button, Input, Modal, Form, Select, Tag, Space, Tooltip, message, Card, Breadcrumb, Spin
 } from "antd";
 import {
     PlusOutlined, EditOutlined, DeleteOutlined,
@@ -8,67 +8,82 @@ import {
     BankOutlined, MedicineBoxOutlined, FileTextOutlined,
     InfoCircleOutlined, UserAddOutlined
 } from "@ant-design/icons";
-
-/*
- * Mock Data
- */
-const MOCK_USERS = [
-    { id: 1, name: "Trần Văn Trọng", email: "trong@gmail.com" },
-    { id: 2, name: "Lê Gia Nam", email: "nam@gmail.com" },
-    { id: 3, name: "Nguyễn Văn A", email: "a@gmail.com" },
-    { id: 4, name: "Phạm Thị B", email: "b@gmail.com" },
-];
-
-const INITIAL_DEPTS = [
-    {
-        id: 1,
-        name: "Khoa Nội",
-        location: "Tầng 3",
-        manager: { id: 1, name: "Trần Văn Trọng", email: "trong@gmail.com" },
-        users_count: 12,
-        docs_count: 5,
-        updated_at: "25/01/2026",
-        members: [1, 3]
-    },
-    {
-        id: 2,
-        name: "Phòng Tài Chính Kế Toán",
-        location: "Tầng 5",
-        manager: null,
-        users_count: 4,
-        docs_count: 120,
-        updated_at: "24/01/2026",
-        members: []
-    },
-    {
-        id: 3,
-        name: "Khoa Dược",
-        location: "Tầng 1",
-        manager: { id: 2, name: "Lê Gia Nam", email: "nam@gmail.com" },
-        users_count: 8,
-        docs_count: 45,
-        updated_at: "20/01/2026",
-        members: [2]
-    },
-];
+import { departmentService, userService } from "../../services";
 
 const DepartmentManagement = () => {
-    const [departments, setDepartments] = useState(INITIAL_DEPTS);
+    const [departments, setDepartments] = useState([]);
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(false);
     const [searchText, setSearchText] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingDept, setEditingDept] = useState(null);
     const [form] = Form.useForm();
 
-    const handleDelete = (id) => {
+    useEffect(() => {
+        fetchDepartments();
+        fetchUsers();
+    }, []);
+
+    const fetchDepartments = async () => {
+        setLoading(true);
+        try {
+            const response = await departmentService.getAllDepartments();
+            const data = response.data || response;
+            const mapped = Array.isArray(data)
+                ? data.map((d, idx) => ({
+                    ...d,
+                    id: d.id || d.department_id || `dept-${idx}`,
+                    name: d.name || d.department_name || 'Chưa cập nhật',
+                    department_code: d.department_code,
+                    department_type: d.department_type,
+                    // Map backend manager_name to head for display
+                    head: d.head || (d.manager_name ? { name: d.manager_name, email: d.manager_email } : null),
+                    // Map description fallbacks
+                    description: d.description || d.department_description || '',
+                    // updated_at already exists; keep as-is
+                }))
+                : [];
+            setDepartments(mapped);
+        } catch (error) {
+            message.error(error.response?.data?.message || "Không thể tải danh sách phòng ban");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchUsers = async () => {
+        try {
+            const response = await userService.getAllUsers();
+            const data = response.data || response;
+            const mapped = Array.isArray(data)
+                ? data.map((u, idx) => ({
+                    ...u,
+                    id: u.id || u.user_id || `user-${idx}`,
+                    name: u.name || u.full_name || u.username || 'Người dùng',
+                    email: u.email,
+                }))
+                : [];
+            setUsers(mapped);
+        } catch (error) {
+            console.error("Failed to fetch users:", error);
+        }
+    };
+
+    const handleDelete = async (id) => {
         Modal.confirm({
             title: 'Xác nhận xóa',
             content: 'Bạn có chắc chắn muốn xóa phòng ban này? Hành động này không thể hoàn tác.',
             okText: 'Xóa',
             okType: 'danger',
             cancelText: 'Hủy',
-            onOk() {
-                setDepartments(prev => prev.filter(d => d.id !== id));
-                message.success('Đã xóa phòng ban thành công');
+            async onOk() {
+                try {
+                    await departmentService.deleteDepartment(id);
+                    message.success('Đã xóa phòng ban thành công');
+                    fetchDepartments();
+                } catch (error) {
+                    message.error(error.response?.data?.message || 'Không thể xóa phòng ban');
+                }
             },
         });
     };
@@ -77,9 +92,11 @@ const DepartmentManagement = () => {
         setEditingDept(record);
         form.setFieldsValue({
             name: record.name,
+            description: record.description,
             location: record.location,
-            managerId: record.manager?.id,
-            members: record.members
+            head_id: record.head_id,
+            department_type: record.department_type,
+            department_code: record.department_code,
         });
         setIsModalOpen(true);
     };
@@ -90,42 +107,36 @@ const DepartmentManagement = () => {
         setIsModalOpen(true);
     };
 
-    const handleOk = () => {
-        form.validateFields().then(values => {
+    const handleOk = async () => {
+        try {
+            const values = await form.validateFields();
+
+            // Map form -> backend fields (department_code, department_name, department_type, description)
+            const department_code = values.department_code
+                || editingDept?.department_code
+                || (values.name ? values.name.trim().toUpperCase().replace(/\s+/g, '_') : 'DEPT');
+            const payload = {
+                department_code,
+                department_name: values.name,
+                department_type: values.department_type || editingDept?.department_type || 'simple',
+                description: values.description || '',
+            };
+
             if (editingDept) {
-                // Update logic
-                setDepartments(prev => prev.map(d => {
-                    if (d.id === editingDept.id) {
-                        const manager = MOCK_USERS.find(u => u.id === values.managerId) || null;
-                        return {
-                            ...d,
-                            ...values,
-                            manager,
-                            updated_at: "29/01/2026" // Mock update
-                        };
-                    }
-                    return d;
-                }));
-                message.success('Cập nhật thành công');
+                await departmentService.updateDepartment(editingDept.id, payload);
+                message.success('Cập nhật phòng ban thành công');
             } else {
-                // Create logic
-                const newId = departments.length + 1;
-                const manager = MOCK_USERS.find(u => u.id === values.managerId) || null;
-                const newDept = {
-                    id: newId,
-                    name: values.name,
-                    location: values.location,
-                    manager,
-                    users_count: 0,
-                    docs_count: 0,
-                    updated_at: "29/01/2026",
-                    members: values.members || []
-                };
-                setDepartments([...departments, newDept]);
+                await departmentService.createDepartment(payload);
                 message.success('Tạo phòng ban thành công');
             }
+
             setIsModalOpen(false);
-        });
+            fetchDepartments();
+        } catch (error) {
+            if (error.response) {
+                message.error(error.response?.data?.message || 'Có lỗi xảy ra');
+            }
+        }
     };
 
     const columns = [
@@ -149,34 +160,26 @@ const DepartmentManagement = () => {
         },
         {
             title: 'Trưởng Phòng',
-            dataIndex: 'manager',
-            key: 'manager',
-            render: (manager) => manager ? (
+            dataIndex: 'head',
+            key: 'head',
+            render: (head) => head ? (
                 <div>
-                    <div className="font-medium text-slate-800">{manager.name}</div>
-                    <div className="text-xs text-slate-500">{manager.email}</div>
+                    <div className="font-medium text-slate-800">{head.name}</div>
+                    <div className="text-xs text-slate-500">{head.email}</div>
                 </div>
             ) : <span className="text-slate-400 italic text-xs">Chưa bổ nhiệm</span>,
         },
         {
-            title: 'Nhân Sự',
-            dataIndex: 'users_count',
-            key: 'users_count',
-            align: 'center',
-            render: (count) => <Tag color="blue">{count} nhân viên</Tag>,
-        },
-        {
-            title: 'Tài Liệu',
-            dataIndex: 'docs_count',
-            key: 'docs_count',
-            align: 'center',
-            render: (count) => <Tag color="cyan">{count} hồ sơ</Tag>,
+            title: 'Mô tả',
+            dataIndex: 'description',
+            key: 'description',
+            render: (text) => text || <span className="text-slate-400 italic text-xs">Chưa có</span>,
         },
         {
             title: 'Cập Nhật',
             dataIndex: 'updated_at',
             key: 'updated_at',
-            render: (date) => <span className="text-slate-500 text-sm">{date}</span>
+            render: (date) => <span className="text-slate-500 text-sm">{date ? new Date(date).toLocaleDateString('vi-VN') : '-'}</span>
         },
         {
             title: 'Hành Động',
@@ -198,7 +201,7 @@ const DepartmentManagement = () => {
     ];
 
     const filteredData = departments.filter(d =>
-        d.name.toLowerCase().includes(searchText.toLowerCase())
+        (d.name || '').toLowerCase().includes(searchText.toLowerCase())
     );
 
     return (
@@ -213,7 +216,7 @@ const DepartmentManagement = () => {
             />
 
             <Card
-                bordered={false}
+                variant="borderless"
                 className="shadow-sm rounded-lg"
                 title="Quản lý Phòng Ban"
                 extra={
@@ -230,12 +233,15 @@ const DepartmentManagement = () => {
                     </Space>
                 }
             >
-                <Table
-                    columns={columns}
-                    dataSource={filteredData}
-                    rowKey="id"
-                    pagination={{ pageSize: 6 }}
-                />
+                <Spin spinning={loading}>
+                    <Table
+                        columns={columns}
+                        dataSource={filteredData}
+                        // Provide stable fallback keys to avoid React key warnings
+                        rowKey={(record) => record.id || record.department_id || record.name || `dept-${record.location || ''}`}
+                        pagination={{ pageSize: 6, placement: 'bottomRight' }}
+                    />
+                </Spin>
             </Card>
 
             {/* Create/Edit Modal */}
@@ -261,6 +267,13 @@ const DepartmentManagement = () => {
                     </Form.Item>
 
                     <Form.Item
+                        name="description"
+                        label="Mô tả"
+                    >
+                        <Input.TextArea placeholder="Mô tả về phòng ban" rows={3} />
+                    </Form.Item>
+
+                    <Form.Item
                         name="location"
                         label="Địa điểm / Tầng"
                     >
@@ -271,30 +284,19 @@ const DepartmentManagement = () => {
                         </Select>
                     </Form.Item>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <Form.Item
-                            name="managerId"
-                            label="Trưởng phòng"
-                            tooltip="Chỉ nhân viên thuộc phòng ban này mới được chọn làm trưởng phòng"
-                        >
-                            <Select placeholder="Chọn quản lý" allowClear>
-                                {MOCK_USERS.map(u => (
-                                    <Select.Option key={u.id} value={u.id}>{u.name}</Select.Option>
-                                ))}
-                            </Select>
-                        </Form.Item>
-
-                        <Form.Item
-                            name="members"
-                            label="Thành viên ban đầu"
-                        >
-                            <Select mode="multiple" placeholder="Thêm nhân viên" maxTagCount="responsive">
-                                {MOCK_USERS.map(u => (
-                                    <Select.Option key={u.id} value={u.id}>{u.name}</Select.Option>
-                                ))}
-                            </Select>
-                        </Form.Item>
-                    </div>
+                    <Form.Item
+                        name="head_id"
+                        label="Trưởng phòng"
+                        tooltip="Chọn người quản lý phòng ban"
+                    >
+                        <Select placeholder="Chọn quản lý" allowClear showSearch filterOption={(input, option) =>
+                            option.children.toLowerCase().includes(input.toLowerCase())
+                        }>
+                            {users.map(u => (
+                                <Select.Option key={u.id} value={u.id}>{u.name} ({u.email})</Select.Option>
+                            ))}
+                        </Select>
+                    </Form.Item>
                 </Form>
             </Modal>
         </div>
