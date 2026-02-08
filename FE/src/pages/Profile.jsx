@@ -13,11 +13,10 @@ const { Title, Text, Paragraph } = Typography;
 
 const Profile = () => {
     const { user, updateUser } = useAuth();
-    const [isEditing, setIsEditing] = useState(false);
     const [form] = Form.useForm();
     const [activeTab, setActiveTab] = useState("info");
 
-    const [avatar, setAvatar] = useState(user.avatar || `https://ui-avatars.com/api/?name=${user.name}&background=random`);
+    const [avatar] = useState(user.avatar || `https://ui-avatars.com/api/?name=${user.name}&background=random`);
 
     const handleFinish = (values) => {
         updateUser({
@@ -26,7 +25,6 @@ const Profile = () => {
             avatar
         });
         message.success("Cập nhật thông tin thành công!");
-        setIsEditing(false);
         setActiveTab("info");
     };
 

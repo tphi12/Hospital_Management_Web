@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { ROLES } from "../lib/roles";
 import { Form, Input, Button, Checkbox, Card, Alert, message } from "antd";
 import { UserOutlined, LockOutlined, LoginOutlined } from "@ant-design/icons";
 import hospitalLogoLarge from "../assets/hospital-logo-large.png";
@@ -14,32 +13,24 @@ const Login = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
 
-    const onFinish = (values) => {
+    const onFinish = async (values) => {
         setIsLoading(true);
         setErrorMsg("");
 
-        // Simulate network delay for effect
-        setTimeout(() => {
-            const username = values.username.toLowerCase().trim();
-            let role = null;
-
-            if (username.includes("admin")) role = ROLES.ADMIN;
-            else if (username.includes("clerk") && !username.includes("dept")) role = ROLES.HOSPITAL_CLERK;
-            else if (username.includes("head") || username.includes("truong")) role = ROLES.HEAD_OF_DEPT;
-            else if (username.includes("dept")) role = ROLES.DEPT_CLERK;
-            else if (username.includes("khth")) role = ROLES.KHTH;
-            else if (username.includes("staff") || username.includes("nhanu")) role = ROLES.STAFF;
-            else if (username === "doctor") role = ROLES.STAFF; // Alias
-
-            if (role) {
+        try {
+            const result = await login(values.username, values.password);
+            
+            if (result.success) {
                 message.success("Đăng nhập thành công!");
-                login(role);
                 navigate(from, { replace: true });
             } else {
-                setErrorMsg("Tên đăng nhập không tồn tại. Thử: admin, staff, head, clerk...");
-                setIsLoading(false);
+                setErrorMsg(result.message);
             }
-        }, 600);
+        } catch {
+            setErrorMsg("Có lỗi xảy ra. Vui lòng thử lại!");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -86,11 +77,11 @@ const Login = () => {
                 >
                     <Form.Item
                         name="username"
-                        rules={[{ required: true, message: 'Vui lòng nhập tên tài khoản!' }]}
+                        rules={[{ required: true, message: 'Vui lòng nhập email hoặc username!' }]}
                     >
                         <Input
                             prefix={<UserOutlined className="text-slate-400" />}
-                            placeholder="Tài khoản"
+                            placeholder="Email hoặc Username"
                             className="rounded-lg"
                         />
                     </Form.Item>
@@ -128,10 +119,6 @@ const Login = () => {
                         </Button>
                     </Form.Item>
                 </Form>
-
-                <div className="text-center text-xs text-slate-400 mt-4">
-                    Demo Credentials: admin / any
-                </div>
             </Card>
         </div>
     );

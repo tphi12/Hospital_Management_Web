@@ -76,7 +76,7 @@ jobs:
           fi
       
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: frontend-build-${{ matrix.node-version }}
           path: FE/dist/

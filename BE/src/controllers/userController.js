@@ -512,6 +512,8 @@ const assignRole = async (req, res) => {
     
     const roleDeptId = scope_type === 'department' ? (department_id || user.department_id) : null;
     
+    // Đảm bảo mỗi user chỉ có 1 vai trò: xóa hết rồi gán lại
+    await Role.removeAllUserRoles(userId);
     await Role.assignRoleToUser(userId, role_id, scope_type, roleDeptId);
     
     res.status(201).json({
