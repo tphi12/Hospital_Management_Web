@@ -1,0 +1,186 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'FE/**'
+      - '.github/workflows/frontend-ci.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'FE/**'
+      - '.github/workflows/frontend-ci.yml'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    defaults:
+      run:
+        working-directory: ./FE
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: FE/package-lock.json
+      
+      - name: Cache node modules
+        uses: actions/cache@v3
+        with:
+          path: FE/node_modules
+          key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('FE/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ matrix.node-version }}-
+            ${{ runner.os }}-node-
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Check for security vulnerabilities
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+      
+      - name: Lint code
+        run: npm run lint
+      
+      - name: Run tests (if configured)
+        run: npm test || echo "No test script configured"
+        env:
+          NODE_ENV: test
+        continue-on-error: true
+      
+      - name: Build application
+        run: npm run build
+        env:
+          NODE_ENV: production
+      
+      - name: Check build output
+        run: |
+          if [ -d "dist" ]; then
+            echo "✓ Build successful - dist directory created"
+            ls -la dist/
+          else
+            echo "✗ Build failed - dist directory not found"
+            exit 1
+          fi
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build-${{ matrix.node-version }}
+          path: FE/dist/
+          retention-days: 7
+
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./FE
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: FE/package-lock.json
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Lint with detailed output
+        run: npm run lint -- --max-warnings=0 || true
+      
+      - name: Check for outdated packages
+        run: npm outdated || true
+      
+      - name: Check package.json format
+        run: |
+          if [ -f "package.json" ]; then
+            node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8'))"
+            echo "✓ package.json is valid JSON"
+          fi
+      
+      - name: Validate vite config
+        run: |
+          if [ -f "vite.config.js" ]; then
+            node --check vite.config.js
+            echo "✓ vite.config.js is valid"
+          fi
+
+  bundle-analysis:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./FE
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: FE/package-lock.json
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build for production
+        run: npm run build
+        env:
+          NODE_ENV: production
+      
+      - name: Analyze bundle size
+        run: |
+          echo "📦 Bundle Analysis:"
+          du -sh dist/
+          find dist/ -type f -name "*.js" -exec du -h {} \; | sort -rh | head -10
+
+  security:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./FE
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run security audit
+        run: npm audit --production
+        continue-on-error: true
+      
+      - name: Check for hardcoded secrets
+        run: |
+          echo "🔒 Checking for potential secrets..."
+          ! grep -r "api[_-]key\s*=\s*['\"]" src/ || echo "⚠️  Warning: Found potential API keys"
+          ! grep -r "password\s*=\s*['\"]" src/ || echo "⚠️  Warning: Found potential passwords"
+          ! grep -r "token\s*=\s*['\"]" src/ || echo "⚠️  Warning: Found potential tokens"

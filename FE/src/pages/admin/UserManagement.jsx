@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
     Table,
     Button,
@@ -16,7 +16,8 @@ import {
     Avatar,
     Typography,
     Row,
-    Col
+    Col,
+    Spin
 } from "antd";
 import {
     PlusOutlined,
@@ -28,129 +29,141 @@ import {
     CloseCircleOutlined
 } from "@ant-design/icons";
 import { ROLES, ROLE_DETAILS } from "../../lib/roles";
+import { userService, departmentService, roleService } from "../../services";
 
 const { Title, Text } = Typography;
 
-/**
- * Mock Data
- */
-const INITIAL_USERS = [
-    {
-        id: 1,
-        name: "Nguyễn Văn Admin",
-        username: "admin",
-        email: "admin@hospital.com",
-        phone: "0901234567",
-        dept_id: 1,
-        dept: "Ban Giám Đốc",
-        position: "Quản trị viên",
-        roles: [ROLES.ADMIN],
-        active: true,
-        avatar: "https://ui-avatars.com/api/?name=Nguyen+Van+Admin&background=random",
-    },
-    {
-        id: 2,
-        name: "Trần Thị Bác Sĩ",
-        username: "user1",
-        email: "bs.tran@hospital.com",
-        phone: "0912345678",
-        dept_id: 2,
-        dept: "Khoa Nội",
-        position: "Trưởng khoa",
-        roles: [ROLES.HEAD_OF_DEPT],
-        active: true,
-        avatar: "https://ui-avatars.com/api/?name=Tran+Thi+Bac+Si&background=random",
-    },
-    {
-        id: 3,
-        name: "Lê Văn Kế Toán",
-        username: "ketoan",
-        email: "ketoan@hospital.com",
-        phone: "0987654321",
-        dept_id: 3,
-        dept: "Phòng Tài Chính",
-        position: "Nhân viên Kế toán",
-        roles: [ROLES.STAFF],
-        active: false,
-        avatar: "https://ui-avatars.com/api/?name=Le+Van+Ke+Toan&background=random",
-    },
-    {
-        id: 4,
-        name: "Phạm Điều Dưỡng",
-        username: "nurse1",
-        email: "dieuduong@hospital.com",
-        phone: "0933333333",
-        dept_id: 2,
-        dept: "Khoa Nội",
-        position: "Thư ký khoa",
-        roles: [ROLES.DEPT_CLERK],
-        active: true,
-        avatar: "https://ui-avatars.com/api/?name=Pham+Dieu+Duong&background=random",
-    },
-];
-
-const DEPARTMENTS = [
-    { id: 1, name: "Ban Giám Đốc" },
-    { id: 2, name: "Khoa Nội" },
-    { id: 3, name: "Phòng Tài Chính" },
-    { id: 4, name: "Khoa Ngoại" },
-    { id: 5, name: "Phòng Hành Chính" },
-    { id: 6, name: "Khoa Sản" },
-    { id: 7, name: "Khoa Hình ảnh" },
-];
-
 const UserManagement = () => {
-    const [users, setUsers] = useState(INITIAL_USERS);
+    const [users, setUsers] = useState([]);
+    const [departments, setDepartments] = useState([]);
+    const [roles, setRoles] = useState([]);
+    const [loading, setLoading] = useState(false);
     const [searchText, setSearchText] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
     const [form] = Form.useForm();
 
+    // Fetch initial data
+    useEffect(() => {
+        fetchUsers();
+        fetchDepartments();
+        fetchRoles();
+    }, []);
+
+    const fetchUsers = async () => {
+        setLoading(true);
+        try {
+            const response = await userService.getAllUsers();
+            const data = response.data || response;
+            const mapped = Array.isArray(data)
+                ? data.map(u => ({
+                    ...u,
+                    id: u.id || u.user_id, // đảm bảo có id cho rowKey & api calls
+                    name: u.name || u.full_name || u.username || u.email,
+                    full_name: u.full_name || u.name,
+                    department_id: u.department_id,
+                    department: u.department || {
+                        name: u.department_name || 'Chưa có',
+                        code: u.department_code,
+                    },
+                    role: u.role || (u.role_name || u.role_code || u.roles
+                        ? { name: u.role_name || u.role_code || u.roles }
+                        : null),
+                }))
+                : [];
+            setUsers(mapped);
+        } catch (error) {
+            message.error(error.response?.data?.message || "Không thể tải danh sách người dùng");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchDepartments = async () => {
+        try {
+            const response = await departmentService.getAllDepartments();
+            const data = response.data || response;
+            const mapped = Array.isArray(data)
+                ? data.map((d, idx) => ({
+                    ...d,
+                    id: d.id || d.department_id || `dept-${idx}`,
+                    name: d.name || d.department_name || 'Chưa cập nhật',
+                }))
+                : [];
+            setDepartments(mapped);
+        } catch (error) {
+            console.error("Failed to fetch departments:", error);
+        }
+    };
+
+    const fetchRoles = async () => {
+        try {
+            const response = await roleService.getAllRoles();
+            const data = response.data || response;
+            const mapped = Array.isArray(data)
+                ? data.map((r, idx) => ({
+                    ...r,
+                    id: r.id || r.role_id || `role-${idx}`,
+                    name: r.name || r.role_name || r.role_code || 'Vai trò',
+                }))
+                : [];
+            setRoles(mapped);
+        } catch (error) {
+            console.error("Failed to fetch roles:", error);
+        }
+    };
+
     const handleSearch = (e) => setSearchText(e.target.value.toLowerCase());
 
-    const filteredUsers = users.filter(user =>
-        user.name.toLowerCase().includes(searchText) ||
-        user.email.toLowerCase().includes(searchText)
-    );
+    const filteredUsers = users.filter(user => {
+        const name = (user?.name || '').toLowerCase();
+        const email = (user?.email || '').toLowerCase();
+        return name.includes(searchText) || email.includes(searchText);
+    });
 
-    const handleDelete = (id) => {
+    const handleDelete = async (id) => {
         Modal.confirm({
             title: 'Xác nhận xóa',
-            content: 'Bạn có chắc muốn xóa mềm tài khoản này? Nó sẽ bị ẩn khỏi danh sách.',
+            content: 'Bạn có chắc muốn xóa người dùng này?',
             okText: 'Xóa',
             okType: 'danger',
             cancelText: 'Hủy',
-            onOk() {
-                setUsers(prev => prev.filter(u => u.id !== id));
-                message.success('Đã xóa người dùng thành công');
+            async onOk() {
+                try {
+                    await userService.deleteUser(id);
+                    message.success('Đã xóa người dùng thành công');
+                    fetchUsers();
+                } catch (error) {
+                    message.error(error.response?.data?.message || 'Không thể xóa người dùng');
+                }
             },
         });
     };
 
-    const handleToggleStatus = (record) => {
-        const newStatus = !record.active;
-        setUsers(users.map(u => {
-            if (u.id === record.id) {
-                return {
-                    ...u,
-                    active: newStatus
-                };
-            }
-            return u;
-        }));
-        message.success(`${newStatus ? 'Kích hoạt' : 'Khóa'} tài khoản ${record.username} thành công`);
+    const handleToggleStatus = async (record) => {
+        const newStatus = record.status === 'active' ? 'inactive' : 'active';
+        const userId = record.id || record.user_id;
+        if (!userId) {
+            message.error('Không tìm thấy ID người dùng');
+            return;
+        }
+        try {
+            await userService.updateUserStatus(userId, newStatus);
+            message.success(`${newStatus === 'active' ? 'Kích hoạt' : 'Khóa'} tài khoản thành công`);
+            fetchUsers();
+        } catch (error) {
+            message.error(error.response?.data?.message || 'Không thể cập nhật trạng thái');
+        }
     };
 
     const handleEdit = (record) => {
         setEditingUser(record);
         form.setFieldsValue({
-            name: record.name,
-            username: record.username,
+            name: record.full_name || record.name,
             email: record.email,
             phone: record.phone,
-            dept_id: record.dept_id,
-            roles: record.roles,
-            active: record.active
+            department_id: record.department_id,
+            role_id: record.role_id || record.role?.id || record.role?.role_id,
         });
         setIsModalOpen(true);
     };
@@ -158,40 +171,51 @@ const UserManagement = () => {
     const handleCreate = () => {
         setEditingUser(null);
         form.resetFields();
-        form.setFieldsValue({ active: true });
         setIsModalOpen(true);
     };
 
-    const handleOk = () => {
-        form.validateFields().then(values => {
-            const deptName = DEPARTMENTS.find(d => d.id === values.dept_id)?.name || "Chưa có phòng ban";
+    const handleOk = async () => {
+        try {
+            const values = await form.validateFields();
+
+            // Map form values to backend payload
+            const payload = {
+                full_name: values.name,
+                username: (values.username
+                    || editingUser?.username
+                    || (values.email ? values.email.split('@')[0] : values.name)?.toLowerCase().replace(/\s+/g, '.'))?.trim(),
+                email: values.email,
+                phone: values.phone,
+                department_id: values.department_id,
+                role_id: values.role_id,
+                scope_type: 'department',
+                employee_code: values.employee_code || null,
+                gender: values.gender || null,
+                date_of_birth: values.date_of_birth || null,
+            };
+
+            if (!editingUser) {
+                payload.password = values.password;
+            }
 
             if (editingUser) {
-                setUsers(prev => prev.map(u => {
-                    if (u.id === editingUser.id) {
-                        return {
-                            ...u,
-                            ...values,
-                            dept: deptName,
-                        };
-                    }
-                    return u;
-                }));
+                await userService.updateUser(editingUser.id, payload);
+                if (values.role_id) {
+                    await userService.assignRole(editingUser.id, values.role_id, 'department', values.department_id);
+                }
                 message.success('Cập nhật người dùng thành công');
             } else {
-                const newUser = {
-                    id: users.length + 1,
-                    ...values,
-                    avatar: `https://ui-avatars.com/api/?name=${values.name}&background=random`,
-                    dept: deptName,
-                    position: "Nhân viên",
-                    roles: values.roles || []
-                };
-                setUsers([...users, newUser]);
+                await userService.createUser(payload);
                 message.success('Tạo người dùng mới thành công');
             }
+
             setIsModalOpen(false);
-        });
+            fetchUsers();
+        } catch (error) {
+            if (error.response) {
+                message.error(error.response?.data?.message || 'Có lỗi xảy ra');
+            }
+        }
     };
 
     const columns = [
@@ -201,7 +225,15 @@ const UserManagement = () => {
             key: 'name',
             render: (text, record) => (
                 <Space>
-                    <Avatar src={record.avatar} shape="square" size="large" icon={<UserOutlined />} />
+                    <Avatar 
+                        src={record.avatar} 
+                        shape="square" 
+                        size="large" 
+                        icon={<UserOutlined />}
+                        style={{ backgroundColor: '#1890ff' }}
+                    >
+                        {!record.avatar && text?.charAt(0)}
+                    </Avatar>
                     <div>
                         <Text strong className="block">{text}</Text>
                         <Text type="secondary" className="text-xs">{record.email}</Text>
@@ -211,40 +243,35 @@ const UserManagement = () => {
         },
         {
             title: 'Phòng Ban',
-            dataIndex: 'dept',
-            key: 'dept',
-            render: (text, record) => (
+            dataIndex: 'department',
+            key: 'department',
+            render: (dept, record) => (
                 <div>
-                    <Text className="block">{text}</Text>
-                    <Text type="secondary" className="text-xs">{record.position}</Text>
+                    <Text className="block">{dept?.name || 'Chưa có'}</Text>
+                    <Text type="secondary" className="text-xs">{record.position || ''}</Text>
                 </div>
             ),
         },
         {
             title: 'Vai Trò',
-            dataIndex: 'roles',
-            key: 'roles',
-            render: (roles) => (
-                <Space wrap>
-                    {roles.map((role, idx) => {
-                        const roleInfo = ROLE_DETAILS[role];
-                        return (
-                            <Tag key={idx} color={roleInfo ? "blue" : "default"}>
-                                {roleInfo ? roleInfo.label : role}
-                            </Tag>
-                        );
-                    })}
-                </Space>
+            dataIndex: 'role',
+            key: 'role',
+            render: (role) => (
+                role ? (
+                    <Tag color="blue">{role.name}</Tag>
+                ) : (
+                    <Tag>Chưa có</Tag>
+                )
             ),
         },
         {
             title: 'Trạng Thái',
-            dataIndex: 'active',
-            key: 'active',
+            dataIndex: 'status',
+            key: 'status',
             align: 'center',
-            render: (active, record) => (
+            render: (status, record) => (
                 <Switch
-                    checked={active}
+                    checked={status === 'active'}
                     onChange={() => handleToggleStatus(record)}
                     checkedChildren="Hoạt động"
                     unCheckedChildren="Khóa"
@@ -290,7 +317,7 @@ const UserManagement = () => {
                 </Button>
             </div>
 
-            <Card bordered={false} className="shadow-sm">
+            <Card variant="borderless" className="shadow-sm">
                 <div className="mb-4 flex justify-between">
                     <Input
                         prefix={<SearchOutlined className="text-slate-400" />}
@@ -302,12 +329,15 @@ const UserManagement = () => {
                         size="large"
                     />
                 </div>
-                <Table
-                    columns={columns}
-                    dataSource={filteredUsers}
-                    rowKey="id"
-                    pagination={{ pageSize: 8, position: ['bottomRight'] }}
-                />
+                <Spin spinning={loading}>
+                    <Table
+                        columns={columns}
+                        dataSource={filteredUsers}
+                        // Ensure stable unique keys even if backend misses id field
+                        rowKey={(record) => record.id || record.user_id || record.email}
+                        pagination={{ pageSize: 8, placement: 'bottomRight' }}
+                    />
+                </Spin>
             </Card>
 
             <Modal
@@ -343,18 +373,6 @@ const UserManagement = () => {
                         </Col>
                         <Col span={12}>
                             <Form.Item
-                                name="username"
-                                label="Tên đăng nhập"
-                                rules={[{ required: true, message: 'Vui lòng nhập username' }]}
-                            >
-                                <Input prefix={<UserOutlined />} placeholder="username" disabled={!!editingUser} />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item
                                 name="email"
                                 label="Email"
                                 rules={[{ required: true, type: 'email', message: 'Email không hợp lệ' }]}
@@ -362,12 +380,29 @@ const UserManagement = () => {
                                 <Input placeholder="example@gmail.com" />
                             </Form.Item>
                         </Col>
+                    </Row>
+
+                    <Row gutter={16}>
                         <Col span={12}>
                             <Form.Item
                                 name="phone"
                                 label="Số điện thoại"
+                                rules={[{ required: true, message: 'Vui lòng nhập số điện thoại' }]}
                             >
                                 <Input placeholder="09xxxx..." />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item 
+                                name="department_id" 
+                                label="Phòng ban"
+                                rules={[{ required: true, message: 'Vui lòng chọn phòng ban' }]}
+                            >
+                                <Select placeholder="Chọn phòng ban" allowClear>
+                                    {departments.map(d => (
+                                        <Select.Option key={d.id} value={d.id}>{d.name}</Select.Option>
+                                    ))}
+                                </Select>
                             </Form.Item>
                         </Col>
                     </Row>
@@ -406,29 +441,16 @@ const UserManagement = () => {
                         </Row>
                     )}
 
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item name="dept_id" label="Phòng ban">
-                                <Select placeholder="Chọn phòng ban" allowClear>
-                                    {DEPARTMENTS.map(d => (
-                                        <Select.Option key={d.id} value={d.id}>{d.name}</Select.Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="roles" label="Vai trò hệ thống">
-                                <Select mode="multiple" placeholder="Chọn vai trò" maxTagCount="responsive">
-                                    {Object.values(ROLES).map(role => (
-                                        <Select.Option key={role} value={role}>{ROLE_DETAILS[role]?.label || role}</Select.Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                    </Row>
-
-                    <Form.Item name="active" valuePropName="checked" label="Trạng thái tài khoản">
-                        <Switch checkedChildren="Đang hoạt động" unCheckedChildren="Đã khóa" />
+                    <Form.Item 
+                        name="role_id" 
+                        label="Vai trò hệ thống"
+                        rules={[{ required: true, message: 'Vui lòng chọn vai trò' }]}
+                    >
+                        <Select placeholder="Chọn vai trò">
+                            {roles.map(role => (
+                                <Select.Option key={role.id} value={role.id}>{role.name}</Select.Option>
+                            ))}
+                        </Select>
                     </Form.Item>
 
                 </Form>

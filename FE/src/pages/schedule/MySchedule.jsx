@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Calendar, Badge, Modal, Typography, Button, Input, TimePicker, Checkbox, Form, Tag, Tooltip, Layout, Menu, Popconfirm, Select, Dropdown } from 'antd';
 import { Plus, Calendar as CalendarIcon, Clock, AlignLeft, MapPin, Trash2, X, ChevronLeft, ChevronRight, Menu as MenuIcon } from 'lucide-react';
 import dayjs from 'dayjs';
@@ -39,11 +39,8 @@ const MySchedule = () => {
     });
     const [form] = Form.useForm();
 
-    // Derived State: All Events
-    const [allEvents, setAllEvents] = useState([]);
-
-    // --- SYNC LOGIC ---
-    useEffect(() => {
+    // Derived Events (memoized to avoid setState in effect)
+    const allEvents = useMemo(() => {
         const events = [];
 
         // 1. Sync from Duty Schedule
@@ -102,7 +99,7 @@ const MySchedule = () => {
             events.push(...personalEvents);
         }
 
-        setAllEvents(events);
+        return events;
     }, [visibleCalendars, personalEvents]);
 
     // --- HANDLERS ---
@@ -151,10 +148,7 @@ const MySchedule = () => {
         const dayEvents = allEvents.filter(e => e.date === dateStr);
 
         return (
-            <ul className="events p-0 m-0 list-none space-y-0.5 mt-0.5" onClick={(e) => {
-                // Prevent bubbling to date selection if clicking empty space in cell
-                // But generally we want cell click to add event? Maybe later.
-            }}>
+            <ul className="events p-0 m-0 list-none space-y-0.5 mt-0.5" onClick={(event) => event.stopPropagation()}>
                 {dayEvents.map((item) => {
                     const style = COLORS[item.color];
                     return (

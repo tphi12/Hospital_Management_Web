@@ -61,13 +61,19 @@ const login = async (req, res) => {
       });
     }
     
-    // Find user by username
-    const user = await User.findByUsername(username);
+    // Find user by username or email
+    let user;
+    // Check if input is email format
+    if (username.includes('@')) {
+      user = await User.findByEmail(username);
+    } else {
+      user = await User.findByUsername(username);
+    }
     
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: 'Username hoặc password không chính xác'
+        message: 'Email/Username hoặc password không chính xác'
       });
     }
     
@@ -85,7 +91,7 @@ const login = async (req, res) => {
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
-        message: 'Username hoặc password không chính xác'
+        message: 'Email/Username hoặc password không chính xác'
       });
     }
     

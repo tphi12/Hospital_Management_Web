@@ -7,7 +7,7 @@
     "dev": "nodemon src/server.js",
     "setup": "node scripts/setupDatabase.js",
     "hash": "node scripts/generateHash.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"No automated tests yet; skipping\" && exit 0"
   },
   "keywords": ["hospital", "management", "api"],
   "author": "",

@@ -18,22 +18,11 @@ import { useAuth } from "../hooks/useAuth";
 import { ROLES } from "../lib/roles";
 
 const Sidebar = () => {
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
 
     if (!user) return null;
-
-    // Helper to generate menu items
-    const getItem = (label, key, icon, roles, type) => {
-        return {
-            key,
-            icon,
-            label,
-            roles,
-            type,
-        };
-    };
 
     // Define items structure with role check inside map
     const items = [
