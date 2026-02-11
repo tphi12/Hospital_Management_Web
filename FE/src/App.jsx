@@ -20,7 +20,7 @@ import DutySchedule from "./pages/schedule/DutySchedule";
 import WeeklySchedule from "./pages/schedule/WeeklySchedule";
 import Profile from "./pages/Profile";
 
-import { ConfigProvider } from "antd";
+import { ConfigProvider, App as AntdApp } from "antd";
 
 function App() {
   return (
@@ -32,7 +32,8 @@ function App() {
         },
       }}
     >
-      <AuthProvider>
+      <AntdApp>
+        <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
 
@@ -156,6 +157,7 @@ function App() {
           </Route>
         </Routes>
       </AuthProvider>
+      </AntdApp>
     </ConfigProvider>
   );
 }

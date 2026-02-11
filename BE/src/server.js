@@ -126,7 +126,12 @@ const startServer = async () => {
     }
     
     // Initialize Azure Storage
-    await initAzureStorage();
+    const azureConnected = await initAzureStorage();
+    if (!azureConnected) {
+      console.warn('⚠️  Warning: Azure Storage initialization failed. Document upload will not work.');
+      console.warn('⚠️  Please check your Azure Storage configuration in .env file.');
+      // Don't exit - allow server to run but with limited functionality
+    }
     
     // Start server
     app.listen(PORT, () => {

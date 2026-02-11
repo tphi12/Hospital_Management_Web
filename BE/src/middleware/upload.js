@@ -63,16 +63,15 @@ const handleMulterError = (err, req, res, next) => {
   next();
 };
 
-// Generate unique filename
 const generateFileName = (originalName) => {
   const ext = path.extname(originalName);
   const nameWithoutExt = path.basename(originalName, ext);
   const timestamp = Date.now();
   const uuid = uuidv4().substring(0, 8);
   
-  // Sanitize filename
   const sanitized = nameWithoutExt
-    .replace(/[^a-zA-Z0-9]/g, '_')
+    .replace(/[\\/:*?"<>|]/g, '_') 
+    .trim()
     .substring(0, 50);
   
   return `${sanitized}_${timestamp}_${uuid}${ext}`;
