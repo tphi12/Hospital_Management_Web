@@ -26,7 +26,7 @@ class Role {
 
   static async getUserRoles(userId) {
     const [rows] = await pool.execute(
-      `SELECT r.*, ur.scope_type, ur.department_id, d.department_name
+      `SELECT r.*, ur.scope_type, ur.department_id, d.department_name, d.department_code
        FROM USER_ROLE ur
        JOIN ROLE r ON ur.role_id = r.role_id
        LEFT JOIN DEPARTMENT d ON ur.department_id = d.department_id

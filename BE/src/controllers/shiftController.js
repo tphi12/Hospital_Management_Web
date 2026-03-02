@@ -1,5 +1,6 @@
 const Shift = require('../models/Shift');
 const Schedule = require('../models/Schedule');
+const ShiftAssignment = require('../models/ShiftAssignment');
 
 /**
  * @swagger
@@ -28,7 +29,7 @@ const getShiftById = async (req, res) => {
       });
     }
     
-    const assignments = await Shift.getAssignments(req.params.id);
+    const assignments = await ShiftAssignment.findByShift(req.params.id);
     
     res.json({
       success: true,
@@ -87,14 +88,30 @@ const getShiftById = async (req, res) => {
 const createShift = async (req, res) => {
   try {
     const {
-      schedule_id, shift_date, shift_type, note,
-      start_time, end_time, max_staff
+      schedule_id,
+      shift_date,
+      shift_type,
+      note,
+      notes,
+      start_time,
+      end_time,
+      max_staff,
+      department_id,
+      staff_ids,
     } = req.body;
+    const normalizedNote = note ?? notes ?? null;
     
     if (!schedule_id || !shift_date || !shift_type) {
       return res.status(400).json({
         success: false,
         message: 'Vui lòng nhập đầy đủ thông tin'
+      });
+    }
+
+    if (!start_time || !end_time || max_staff == null) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thiếu thông tin ca trực: start_time, end_time hoặc max_staff'
       });
     }
     
@@ -106,17 +123,50 @@ const createShift = async (req, res) => {
         message: 'Không tìm thấy lịch'
       });
     }
+
+    const resolvedDepartmentId =
+      req.user?.department_id ??
+      req.user?.departmentId ??
+      department_id ??
+      schedule.source_department_id;
+
+    if (!resolvedDepartmentId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Không xác định được khoa/phòng tạo ca trực'
+      });
+    }
     
     const shiftId = await Shift.create({
       schedule_id,
-      department_id: req.user.department_id,
+      department_id: resolvedDepartmentId,
       shift_date,
       shift_type,
-      note,
+      note: normalizedNote,
       start_time,
       end_time,
       max_staff
     });
+
+    if (Array.isArray(staff_ids) && staff_ids.length > 0) {
+      const uniqueStaffIds = [...new Set(staff_ids.map((id) => Number(id)).filter(Boolean))];
+
+      if (uniqueStaffIds.length > Number(max_staff)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Số nhân viên phân công vượt quá max_staff của ca trực'
+        });
+      }
+
+      for (const staffId of uniqueStaffIds) {
+        await ShiftAssignment.create({
+          shift_id: shiftId,
+          user_id: staffId,
+          status: 'assigned',
+          note: normalizedNote,
+        });
+      }
+    }
     
     res.status(201).json({
       success: true,
@@ -296,7 +346,20 @@ const assignStaff = async (req, res) => {
       });
     }
     
-    const assignmentId = await Shift.assignStaff(shiftId, user_id, note);
+    const existingAssignment = await ShiftAssignment.checkExistingAssignment(shiftId, user_id);
+    if (existingAssignment) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nhân viên đã được phân công trong ca trực này'
+      });
+    }
+
+    const assignmentId = await ShiftAssignment.create({
+      shift_id: shiftId,
+      user_id,
+      status: 'assigned',
+      note
+    });
     
     res.status(201).json({
       success: true,
@@ -333,7 +396,7 @@ const removeAssignment = async (req, res) => {
   try {
     const assignmentId = req.params.id;
     
-    await Shift.removeAssignment(assignmentId);
+    await ShiftAssignment.delete(assignmentId);
     
     res.json({
       success: true,

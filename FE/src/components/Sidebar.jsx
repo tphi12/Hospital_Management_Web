@@ -1,4 +1,4 @@
-import { useNavigate, useLocation, Link } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
     LayoutDashboard,
     Users,
@@ -9,66 +9,135 @@ import {
     Upload,
     CalendarDays,
     CalendarRange,
-    LogOut,
-    User
 } from "lucide-react";
-import { Menu, Button, Avatar, Divider } from "antd";
+import { Menu, Spin } from "antd";
 import hospitalLogoLarge from "../assets/hospital-logo-large.png";
 import { useAuth } from "../hooks/useAuth";
-import { ROLES } from "../lib/roles";
+import { getEffectiveRoleCodes, isHospitalScope } from "../lib/roleUtils";
+
+const MENU_CONFIG = [
+    {
+        groupLabel: "TỔNG QUAN",
+        items: [
+            {
+                label: "Tổng quan",
+                path: "/",
+                icon: <LayoutDashboard size={18} />,
+                allowedRoles: ["ADMIN", "STAFF", "CLERK", "MANAGER", "HOSPITAL_CLERK", "KHTH"],
+            },
+        ],
+    },
+    {
+        groupLabel: "HỆ THỐNG",
+        items: [
+            { label: "Người dùng", path: "/admin/users", icon: <Users size={18} />, allowedRoles: ["ADMIN"] },
+            { label: "Phân quyền", path: "/admin/roles", icon: <ShieldCheck size={18} />, allowedRoles: ["ADMIN"] },
+            { label: "Phòng ban", path: "/admin/departments", icon: <Building2 size={18} />, allowedRoles: ["ADMIN"] },
+        ],
+    },
+    {
+        groupLabel: "TÀI LIỆU",
+        items: [
+            {
+                label: "Kho tài liệu",
+                path: "/documents/repository",
+                icon: <FileText size={18} />,
+                allowedRoles: ["ADMIN", "HOSPITAL_CLERK", "MANAGER", "STAFF"],
+            },
+            {
+                label: "Upload",
+                path: "/documents/upload",
+                icon: <Upload size={18} />,
+                allowedRoles: ["ADMIN", "CLERK", "MANAGER", "STAFF"],
+            },
+        ],
+    },
+    {
+        groupLabel: "LỊCH TRỰC",
+        items: [
+            {
+                label: "Lịch cá nhân",
+                path: "/schedule/me",
+                icon: <Calendar size={18} />,
+                allowedRoles: ["ADMIN", "CLERK", "MANAGER", "HOSPITAL_CLERK", "KHTH", "STAFF"],
+            },
+            {
+                label: "Upload lịch trực",
+                path: "/schedule/department",
+                icon: <Upload size={18} />,
+                allowedRoles: ["CLERK"],
+            },
+            {
+                label: "Lịch công tác tuần",
+                path: "/schedule/weekly",
+                icon: <CalendarDays size={18} />,
+                allowedRoles: ["KHTH"],
+            },
+            {
+                label: "Toàn viện",
+                path: "/schedule/master",
+                icon: <CalendarRange size={18} />,
+                allowedRoles: ["ADMIN", "CLERK", "MANAGER", "HOSPITAL_CLERK", "KHTH", "STAFF"],
+                requireHospitalScope: true,
+            },
+        ],
+    },
+];
 
 const Sidebar = () => {
-    const { user } = useAuth();
+    const { user, isLoading } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
 
+    if (isLoading) {
+        return (
+            <aside className="w-[260px] bg-white h-screen fixed left-0 top-0 z-50 flex flex-col border-r border-slate-200">
+                <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-100">
+                    <img src={hospitalLogoLarge} alt="Logo" className="w-8 h-8 object-contain" />
+                    <span className="font-bold text-lg text-slate-800 tracking-tight">Thai An Hospital</span>
+                </div>
+                <div className="flex-1 flex items-center justify-center">
+                    <Spin size="small" />
+                </div>
+            </aside>
+        );
+    }
+
     if (!user) return null;
 
-    // Define items structure with role check inside map
-    const items = [
-        {
-            type: 'group', label: 'TỔNG QUAN', children: [
-                { key: '/', icon: <LayoutDashboard size={18} />, label: 'Tổng quan', roles: Object.values(ROLES) }
-            ]
-        },
-        {
-            type: 'group', label: 'HỆ THỐNG', children: [
-                { key: '/admin/users', icon: <Users size={18} />, label: 'Người dùng', roles: [ROLES.ADMIN] },
-                { key: '/admin/roles', icon: <ShieldCheck size={18} />, label: 'Phân quyền', roles: [ROLES.ADMIN] },
-                { key: '/admin/departments', icon: <Building2 size={18} />, label: 'Phòng ban', roles: [ROLES.ADMIN] },
-            ]
-        },
-        {
-            type: 'group', label: 'TÀI LIỆU', children: [
-                { key: '/documents/repository', icon: <FileText size={18} />, label: 'Kho tài liệu', roles: [ROLES.HOSPITAL_CLERK, ROLES.ADMIN, ROLES.HEAD_OF_DEPT, ROLES.STAFF] },
-                { key: '/documents/upload', icon: <Upload size={18} />, label: 'Upload', roles: [ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.ADMIN] },
-            ]
-        },
-        {
-            type: 'group', label: 'LỊCH TRỰC', children: [
-                { key: '/schedule/me', icon: <Calendar size={18} />, label: 'Lịch cá nhân', roles: [ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.HOSPITAL_CLERK, ROLES.KHTH, ROLES.ADMIN] },
-                { key: '/schedule/weekly', icon: <CalendarDays size={18} />, label: 'Lịch tuần', roles: [ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.ADMIN, ROLES.KHTH, ROLES.STAFF, ROLES.HOSPITAL_CLERK] },
-                { key: '/schedule/master', icon: <CalendarRange size={18} />, label: 'Toàn viện', roles: [ROLES.KHTH, ROLES.ADMIN, ROLES.STAFF, ROLES.HEAD_OF_DEPT, ROLES.DEPT_CLERK, ROLES.HOSPITAL_CLERK] },
-            ]
-        },
-    ];
+    const roleCodes = getEffectiveRoleCodes(user);
 
-    // Filter items based on role
-    const getFilteredItems = (menuItems) => {
-        return menuItems.map(group => {
-            const filteredChildren = group.children.filter(child => child.roles.includes(user.role));
+    const canAccessItem = (menuItem) => {
+        const hasAllowedRole = (menuItem.allowedRoles || []).some((role) => roleCodes.has(role));
+        if (!hasAllowedRole) return false;
+        if (menuItem.requireHospitalScope) {
+            return isHospitalScope(user);
+        }
+        return true;
+    };
+
+    const getFilteredItems = (menuGroups) => {
+        return menuGroups.map((group) => {
+            const filteredChildren = group.items
+                .filter(canAccessItem)
+                .map((item) => ({
+                    key: item.path,
+                    icon: item.icon,
+                    label: item.label,
+                }));
+
             if (filteredChildren.length > 0) {
                 return {
-                    ...group,
+                    type: 'group',
+                    label: group.groupLabel,
                     children: filteredChildren,
-                    type: 'group' // Ensure it's treated as a group in Ant Menu
                 };
             }
             return null;
         }).filter(Boolean);
     };
 
-    const menuItems = getFilteredItems(items);
+    const menuItems = getFilteredItems(MENU_CONFIG);
 
     return (
         <aside className="w-[260px] bg-white h-screen fixed left-0 top-0 z-50 flex flex-col border-r border-slate-200">

@@ -4,16 +4,15 @@ const userController = require('../controllers/userController');
 const auth = require('../middleware/auth');
 const { checkAdmin } = require('../middleware/authorize');
 
-// All routes require authentication and admin role
+// All routes require authentication
 router.use(auth);
-router.use(checkAdmin);
 
 router.get('/', userController.getAllUsers);
-router.get('/:id', userController.getUserById);
-router.post('/', userController.createUser);
-router.put('/:id', userController.updateUser);
-router.patch('/:id/status', userController.updateUserStatus);
-router.delete('/:id', userController.deleteUser);
-router.post('/:id/roles', userController.assignRole);
+router.get('/:id', checkAdmin, userController.getUserById);
+router.post('/', checkAdmin, userController.createUser);
+router.put('/:id', checkAdmin, userController.updateUser);
+router.patch('/:id/status', checkAdmin, userController.updateUserStatus);
+router.delete('/:id', checkAdmin, userController.deleteUser);
+router.post('/:id/roles', checkAdmin, userController.assignRole);
 
 module.exports = router;

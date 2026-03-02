@@ -115,7 +115,7 @@ const login = async (req, res) => {
     // Remove password from response
     const { password_hash, ...userWithoutPassword } = user;
     
-    res.json({
+    const loginResponse = {
       success: true,
       message: 'Đăng nhập thành công',
       data: {
@@ -125,7 +125,18 @@ const login = async (req, res) => {
           roles: userRoles
         }
       }
+    };
+
+    console.log('[AUTH_LOGIN_RESPONSE]', {
+      username,
+      user_id: loginResponse.data.user.user_id,
+      department_id: loginResponse.data.user.department_id,
+      roles_count: Array.isArray(loginResponse.data.user.roles) ? loginResponse.data.user.roles.length : 0,
+      roles: loginResponse.data.user.roles,
+      token_present: Boolean(loginResponse.data.token)
     });
+
+    res.json(loginResponse);
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({

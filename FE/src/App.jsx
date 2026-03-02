@@ -16,7 +16,8 @@ import DocumentUpload from "./pages/documents/DocumentUpload";
 import DocumentList from "./pages/documents/DocumentList";
 import { DocumentApprovals } from "./pages/documents/DocumentPages";
 import MySchedule from "./pages/schedule/MySchedule";
-import DutySchedule from "./pages/schedule/DutySchedule";
+import DutyScheduleClerkPage from "./pages/schedule/DutyScheduleClerkPage";
+import DutyScheduleStaffPage from "./pages/schedule/DutyScheduleStaffPage";
 import WeeklySchedule from "./pages/schedule/WeeklySchedule";
 import Profile from "./pages/Profile";
 
@@ -132,8 +133,8 @@ function App() {
             <Route
               path="/schedule/department"
               element={
-                <ProtectedRoute allowedRoles={[ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.KHTH, ROLES.ADMIN]}>
-                  <DutySchedule role="CLERK" />
+                <ProtectedRoute allowedRoles={[ROLES.DEPT_CLERK]}>
+                  <DutyScheduleClerkPage />
                 </ProtectedRoute>
               }
             />
@@ -141,14 +142,14 @@ function App() {
               path="/schedule/master"
               element={
                 <ProtectedRoute allowedRoles={[ROLES.KHTH, ROLES.ADMIN, ROLES.STAFF, ROLES.HEAD_OF_DEPT, ROLES.DEPT_CLERK, ROLES.HOSPITAL_CLERK]}>
-                  <DutySchedule role="ADMIN" />
+                  <DutyScheduleStaffPage />
                 </ProtectedRoute>
               }
             />
             <Route
               path="/schedule/weekly"
               element={
-                <ProtectedRoute allowedRoles={[ROLES.KHTH, ROLES.ADMIN, ROLES.STAFF, ROLES.HEAD_OF_DEPT, ROLES.DEPT_CLERK, ROLES.HOSPITAL_CLERK]}>
+                <ProtectedRoute allowedRoles={[ROLES.KHTH]}>
                   <WeeklySchedule role="ADMIN" />
                 </ProtectedRoute>
               }

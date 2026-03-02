@@ -1,6 +1,8 @@
 const Schedule = require('../models/Schedule');
 const Shift = require('../models/Shift');
+const ShiftAssignment = require('../models/ShiftAssignment');
 const Department = require('../models/Department');
+const ScheduleService = require('../services/ScheduleService');
 const { pool } = require('../config/database');
 
 /**
@@ -44,10 +46,27 @@ const getAllSchedules = async (req, res) => {
     };
     
     const schedules = await Schedule.findAll(filters);
+
+    const schedulesWithDetails = await Promise.all(
+      schedules.map(async (schedule) => {
+        const shifts = await Shift.findBySchedule(schedule.schedule_id);
+        const shiftsWithAssignments = await Promise.all(
+          shifts.map(async (shift) => ({
+            ...shift,
+            assignments: await ShiftAssignment.findByShift(shift.shift_id),
+          })),
+        );
+
+        return {
+          ...schedule,
+          shifts: shiftsWithAssignments,
+        };
+      }),
+    );
     
     res.json({
       success: true,
-      data: schedules
+      data: schedulesWithDetails
     });
   } catch (error) {
     console.error('Get schedules error:', error);
@@ -160,11 +179,7 @@ const getScheduleById = async (req, res) => {
  *         description: Tạo lịch thành công
  */
 const createSchedule = async (req, res) => {
-  const connection = await pool.getConnection();
-  
   try {
-    await connection.beginTransaction();
-    
     const { schedule_type, week, year, description, shifts } = req.body;
     
     if (!schedule_type || !week || !year) {
@@ -174,18 +189,45 @@ const createSchedule = async (req, res) => {
       });
     }
     
-    // Check if schedule already exists
-    const existing = await Schedule.checkExists(
-      schedule_type,
-      req.user.department_id,
-      week,
-      year
-    );
-    
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: 'Lịch này đã tồn tại'
+    // Duty schedule flow is handled by service to avoid duplicate business logic
+    if (schedule_type === 'duty') {
+      const scheduleId = await ScheduleService.createDutySchedule({
+        userId: req.user.userId,
+        departmentId: req.user.department_id,
+        week,
+        year,
+        description
+      });
+
+      if (shifts && shifts.length > 0) {
+        for (const shift of shifts) {
+          const shiftId = await ScheduleService.addShift({
+            scheduleId,
+            departmentId: req.user.department_id,
+            shiftDate: shift.shift_date,
+            shiftType: shift.shift_type,
+            startTime: shift.start_time,
+            endTime: shift.end_time,
+            maxStaff: shift.max_staff,
+            note: shift.note
+          });
+
+          if (shift.staff_ids && shift.staff_ids.length > 0) {
+            for (const staffId of shift.staff_ids) {
+              await ScheduleService.assignUserToShift({
+                shiftId,
+                userId: staffId,
+                note: shift.note
+              });
+            }
+          }
+        }
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: 'Tạo lịch thành công',
+        data: { scheduleId }
       });
     }
     
@@ -250,13 +292,16 @@ const createSchedule = async (req, res) => {
         // Assign staff if provided
         if (shift.staff_ids && shift.staff_ids.length > 0) {
           for (const staffId of shift.staff_ids) {
-            await Shift.assignStaff(shiftId, staffId);
+            await ShiftAssignment.create({
+              shift_id: shiftId,
+              user_id: staffId,
+              status: 'assigned',
+              note: null
+            });
           }
         }
       }
     }
-    
-    await connection.commit();
     
     res.status(201).json({
       success: true,
@@ -264,15 +309,12 @@ const createSchedule = async (req, res) => {
       data: { scheduleId }
     });
   } catch (error) {
-    await connection.rollback();
     console.error('Create schedule error:', error);
     res.status(500).json({
       success: false,
       message: 'Lỗi tạo lịch',
       error: error.message
     });
-  } finally {
-    connection.release();
   }
 };
 
@@ -306,49 +348,24 @@ const createSchedule = async (req, res) => {
  */
 const updateSchedule = async (req, res) => {
   try {
-    const scheduleId = req.params.id;
-    const schedule = await Schedule.findById(scheduleId);
-    
-    if (!schedule) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy lịch'
-      });
-    }
-    
-    // Check permission based on status
-    const userRoles = req.user.roles || [];
-    const isAdmin = userRoles.some(r => r.role_code === 'ADMIN');
-    
-    // IF status = 'draft' → source_department can edit
-    // IF status = 'submitted' or 'approved' → owner_department (KHTH) can edit
-    
-    if (!isAdmin) {
-      if (schedule.status === 'draft') {
-        if (schedule.source_department_id !== req.user.department_id) {
-          return res.status(403).json({
-            success: false,
-            message: 'Bạn không có quyền chỉnh sửa lịch này'
-          });
-        }
-      } else {
-        if (schedule.owner_department_id !== req.user.department_id) {
-          return res.status(403).json({
-            success: false,
-            message: 'Chỉ phòng KHTH mới có quyền chỉnh sửa lịch đã gửi'
-          });
-        }
-      }
-    }
-    
-    await Schedule.update(scheduleId, req.body);
-    
+    const scheduleId = parseInt(req.params.id, 10);
+    await ScheduleService.updateSchedule(scheduleId, req.user, req.body);
     res.json({
       success: true,
       message: 'Cập nhật lịch thành công'
     });
   } catch (error) {
     console.error('Update schedule error:', error);
+
+    if (error.message === 'Schedule not found') {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch' });
+    }
+    if (
+      error.message === 'Only source department can update draft schedules' ||
+      error.message === 'Only owner department can update submitted or approved schedules'
+    ) {
+      return res.status(403).json({ success: false, message: 'Bạn không có quyền chỉnh sửa lịch này' });
+    }
     res.status(500).json({
       success: false,
       message: 'Lỗi cập nhật lịch',
@@ -375,38 +392,27 @@ const updateSchedule = async (req, res) => {
  */
 const submitSchedule = async (req, res) => {
   try {
-    const scheduleId = req.params.id;
-    const schedule = await Schedule.findById(scheduleId);
-    
-    if (!schedule) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy lịch'
-      });
-    }
-    
-    if (schedule.status !== 'draft') {
-      return res.status(400).json({
-        success: false,
-        message: 'Chỉ có thể gửi lịch đang ở trạng thái nháp'
-      });
-    }
-    
-    if (schedule.source_department_id !== req.user.department_id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Bạn không có quyền gửi lịch này'
-      });
-    }
-    
-    await Schedule.updateStatus(scheduleId, 'submitted');
-    
+    const scheduleId = parseInt(req.params.id, 10);
+
+    await ScheduleService.submitSchedule(scheduleId, req.user);
+
     res.json({
       success: true,
       message: 'Gửi lịch thành công'
     });
   } catch (error) {
     console.error('Submit schedule error:', error);
+
+    if (error.message === 'Schedule not found') {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch' });
+    }
+    if (error.message === 'Only draft schedules can be submitted') {
+      return res.status(400).json({ success: false, message: 'Chỉ có thể gửi lịch đang ở trạng thái nháp' });
+    }
+    if (error.message === 'You do not have permission to submit this schedule') {
+      return res.status(403).json({ success: false, message: 'Bạn không có quyền gửi lịch này' });
+    }
+
     res.status(500).json({
       success: false,
       message: 'Lỗi gửi lịch',
@@ -433,32 +439,24 @@ const submitSchedule = async (req, res) => {
  */
 const approveSchedule = async (req, res) => {
   try {
-    const scheduleId = req.params.id;
-    const schedule = await Schedule.findById(scheduleId);
-    
-    if (!schedule) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy lịch'
-      });
-    }
-    
-    // Only KHTH can approve
-    if (schedule.owner_department_id !== req.user.department_id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Chỉ phòng KHTH mới có quyền duyệt lịch'
-      });
-    }
-    
-    await Schedule.updateStatus(scheduleId, 'approved');
-    
+    const scheduleId = parseInt(req.params.id, 10);
+    await ScheduleService.approveSchedule(scheduleId, req.user);
     res.json({
       success: true,
       message: 'Duyệt lịch thành công. Lịch đã được public cho toàn bộ nhân viên'
     });
   } catch (error) {
     console.error('Approve schedule error:', error);
+
+    if (error.message === 'Schedule not found') {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch' });
+    }
+    if (error.message === 'Only submitted schedules can be approved') {
+      return res.status(400).json({ success: false, message: 'Chỉ có thể duyệt lịch đã được gửi' });
+    }
+    if (error.message === 'You do not have permission to approve this schedule') {
+      return res.status(403).json({ success: false, message: 'Chỉ phòng KHTH mới có quyền duyệt lịch' });
+    }
     res.status(500).json({
       success: false,
       message: 'Lỗi duyệt lịch',

@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import PropTypes from 'prop-types';
+import { getEffectiveRoleCodes } from "../lib/roleUtils";
 
 /**
  * Protected Route Component
@@ -26,7 +27,12 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
-    if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+    const userRoleCodes = getEffectiveRoleCodes(user);
+    const hasAllowedRole =
+        allowedRoles.length === 0 ||
+        allowedRoles.some((allowedRole) => userRoleCodes.has(allowedRole));
+
+    if (!hasAllowedRole) {
         return <Navigate to="/unauthorized" replace />;
     }
 
