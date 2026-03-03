@@ -32,8 +32,17 @@ const { pool } = require('../config/database');
 const getAllUsers = async (req, res) => {
   try {
     const { search, department_id, status } = req.query;
-    
-    const users = await User.findAll(search, department_id, status);
+
+    const userRoles = req.user?.roles || [];
+    const isAdmin = userRoles.some((role) => role.role_code === 'ADMIN');
+
+    const effectiveDepartmentId = isAdmin
+      ? department_id
+      : (req.user?.department_id || department_id);
+
+    const effectiveStatus = isAdmin ? status : (status || 'active');
+
+    const users = await User.findAll(search, effectiveDepartmentId, effectiveStatus);
     
     res.json({
       success: true,

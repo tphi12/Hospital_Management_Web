@@ -12,6 +12,7 @@ router.use(auth);
 router.get('/', documentController.getAllDocuments);
 router.get('/stats', documentController.getDocumentStats);
 router.get('/my', documentController.getMyDocuments);
+router.get('/:id/download', documentController.downloadDocument);
 router.get('/:id', documentController.getDocumentById);
 
 // Upload new document

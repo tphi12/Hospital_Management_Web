@@ -1,7 +1,32 @@
 const Schedule = require('../models/Schedule');
 const Shift = require('../models/Shift');
+const ShiftAssignment = require('../models/ShiftAssignment');
 const Department = require('../models/Department');
+const ScheduleService = require('../services/ScheduleService');
+const SchedulePdfService = require('../services/SchedulePdfService');
 const { pool } = require('../config/database');
+
+const hasRoleCode = (user, roleCode) =>
+  (user?.roles || []).some((role) => role?.role_code === roleCode);
+
+const canViewSchedule = (user, schedule) => {
+  if (!user || !schedule) return false;
+  if (hasRoleCode(user, 'ADMIN')) return true;
+
+  const userDepartmentId = Number(user.department_id);
+  const sourceDepartmentId = Number(schedule.source_department_id);
+  const ownerDepartmentId = Number(schedule.owner_department_id);
+
+  if (userDepartmentId === sourceDepartmentId) {
+    return true;
+  }
+
+  if (userDepartmentId === ownerDepartmentId) {
+    return schedule.status === 'submitted' || schedule.status === 'approved';
+  }
+
+  return schedule.status === 'approved';
+};
 
 /**
  * @swagger
@@ -44,10 +69,28 @@ const getAllSchedules = async (req, res) => {
     };
     
     const schedules = await Schedule.findAll(filters);
+    const visibleSchedules = schedules.filter((schedule) => canViewSchedule(req.user, schedule));
+
+    const schedulesWithDetails = await Promise.all(
+      visibleSchedules.map(async (schedule) => {
+        const shifts = await Shift.findBySchedule(schedule.schedule_id);
+        const shiftsWithAssignments = await Promise.all(
+          shifts.map(async (shift) => ({
+            ...shift,
+            assignments: await ShiftAssignment.findByShift(shift.shift_id),
+          })),
+        );
+
+        return {
+          ...schedule,
+          shifts: shiftsWithAssignments,
+        };
+      }),
+    );
     
     res.json({
       success: true,
-      data: schedules
+      data: schedulesWithDetails
     });
   } catch (error) {
     console.error('Get schedules error:', error);
@@ -83,6 +126,13 @@ const getScheduleById = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Không tìm thấy lịch'
+      });
+    }
+
+    if (!canViewSchedule(req.user, schedule)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền xem lịch này'
       });
     }
     
@@ -160,11 +210,7 @@ const getScheduleById = async (req, res) => {
  *         description: Tạo lịch thành công
  */
 const createSchedule = async (req, res) => {
-  const connection = await pool.getConnection();
-  
   try {
-    await connection.beginTransaction();
-    
     const { schedule_type, week, year, description, shifts } = req.body;
     
     if (!schedule_type || !week || !year) {
@@ -174,18 +220,45 @@ const createSchedule = async (req, res) => {
       });
     }
     
-    // Check if schedule already exists
-    const existing = await Schedule.checkExists(
-      schedule_type,
-      req.user.department_id,
-      week,
-      year
-    );
-    
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: 'Lịch này đã tồn tại'
+    // Duty schedule flow is handled by service to avoid duplicate business logic
+    if (schedule_type === 'duty') {
+      const scheduleId = await ScheduleService.createDutySchedule({
+        userId: req.user.userId,
+        departmentId: req.user.department_id,
+        week,
+        year,
+        description
+      });
+
+      if (shifts && shifts.length > 0) {
+        for (const shift of shifts) {
+          const shiftId = await ScheduleService.addShift({
+            scheduleId,
+            departmentId: req.user.department_id,
+            shiftDate: shift.shift_date,
+            shiftType: shift.shift_type,
+            startTime: shift.start_time,
+            endTime: shift.end_time,
+            maxStaff: shift.max_staff,
+            note: shift.note
+          });
+
+          if (shift.staff_ids && shift.staff_ids.length > 0) {
+            for (const staffId of shift.staff_ids) {
+              await ScheduleService.assignUserToShift({
+                shiftId,
+                userId: staffId,
+                note: shift.note
+              });
+            }
+          }
+        }
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: 'Tạo lịch thành công',
+        data: { scheduleId }
       });
     }
     
@@ -250,13 +323,16 @@ const createSchedule = async (req, res) => {
         // Assign staff if provided
         if (shift.staff_ids && shift.staff_ids.length > 0) {
           for (const staffId of shift.staff_ids) {
-            await Shift.assignStaff(shiftId, staffId);
+            await ShiftAssignment.create({
+              shift_id: shiftId,
+              user_id: staffId,
+              status: 'assigned',
+              note: null
+            });
           }
         }
       }
     }
-    
-    await connection.commit();
     
     res.status(201).json({
       success: true,
@@ -264,15 +340,12 @@ const createSchedule = async (req, res) => {
       data: { scheduleId }
     });
   } catch (error) {
-    await connection.rollback();
     console.error('Create schedule error:', error);
     res.status(500).json({
       success: false,
       message: 'Lỗi tạo lịch',
       error: error.message
     });
-  } finally {
-    connection.release();
   }
 };
 
@@ -306,49 +379,27 @@ const createSchedule = async (req, res) => {
  */
 const updateSchedule = async (req, res) => {
   try {
-    const scheduleId = req.params.id;
-    const schedule = await Schedule.findById(scheduleId);
-    
-    if (!schedule) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy lịch'
-      });
-    }
-    
-    // Check permission based on status
-    const userRoles = req.user.roles || [];
-    const isAdmin = userRoles.some(r => r.role_code === 'ADMIN');
-    
-    // IF status = 'draft' → source_department can edit
-    // IF status = 'submitted' or 'approved' → owner_department (KHTH) can edit
-    
-    if (!isAdmin) {
-      if (schedule.status === 'draft') {
-        if (schedule.source_department_id !== req.user.department_id) {
-          return res.status(403).json({
-            success: false,
-            message: 'Bạn không có quyền chỉnh sửa lịch này'
-          });
-        }
-      } else {
-        if (schedule.owner_department_id !== req.user.department_id) {
-          return res.status(403).json({
-            success: false,
-            message: 'Chỉ phòng KHTH mới có quyền chỉnh sửa lịch đã gửi'
-          });
-        }
-      }
-    }
-    
-    await Schedule.update(scheduleId, req.body);
-    
+    const scheduleId = parseInt(req.params.id, 10);
+    await ScheduleService.updateSchedule(scheduleId, req.user, req.body);
     res.json({
       success: true,
       message: 'Cập nhật lịch thành công'
     });
   } catch (error) {
     console.error('Update schedule error:', error);
+
+    if (error.message === 'Schedule not found') {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch' });
+    }
+    if (
+      error.message === 'Only source department can update draft schedules' ||
+      error.message === 'Only owner department can update approved schedules'
+    ) {
+      return res.status(403).json({ success: false, message: 'Bạn không có quyền chỉnh sửa lịch này' });
+    }
+    if (error.message === 'Submitted schedules cannot be updated') {
+      return res.status(400).json({ success: false, message: 'Lịch đã gửi KHTH nên không thể chỉnh sửa' });
+    }
     res.status(500).json({
       success: false,
       message: 'Lỗi cập nhật lịch',
@@ -375,38 +426,27 @@ const updateSchedule = async (req, res) => {
  */
 const submitSchedule = async (req, res) => {
   try {
-    const scheduleId = req.params.id;
-    const schedule = await Schedule.findById(scheduleId);
-    
-    if (!schedule) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy lịch'
-      });
-    }
-    
-    if (schedule.status !== 'draft') {
-      return res.status(400).json({
-        success: false,
-        message: 'Chỉ có thể gửi lịch đang ở trạng thái nháp'
-      });
-    }
-    
-    if (schedule.source_department_id !== req.user.department_id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Bạn không có quyền gửi lịch này'
-      });
-    }
-    
-    await Schedule.updateStatus(scheduleId, 'submitted');
-    
+    const scheduleId = parseInt(req.params.id, 10);
+
+    await ScheduleService.submitSchedule(scheduleId, req.user);
+
     res.json({
       success: true,
       message: 'Gửi lịch thành công'
     });
   } catch (error) {
     console.error('Submit schedule error:', error);
+
+    if (error.message === 'Schedule not found') {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch' });
+    }
+    if (error.message === 'Only draft schedules can be submitted') {
+      return res.status(400).json({ success: false, message: 'Chỉ có thể gửi lịch đang ở trạng thái nháp' });
+    }
+    if (error.message === 'You do not have permission to submit this schedule') {
+      return res.status(403).json({ success: false, message: 'Bạn không có quyền gửi lịch này' });
+    }
+
     res.status(500).json({
       success: false,
       message: 'Lỗi gửi lịch',
@@ -433,32 +473,24 @@ const submitSchedule = async (req, res) => {
  */
 const approveSchedule = async (req, res) => {
   try {
-    const scheduleId = req.params.id;
-    const schedule = await Schedule.findById(scheduleId);
-    
-    if (!schedule) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy lịch'
-      });
-    }
-    
-    // Only KHTH can approve
-    if (schedule.owner_department_id !== req.user.department_id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Chỉ phòng KHTH mới có quyền duyệt lịch'
-      });
-    }
-    
-    await Schedule.updateStatus(scheduleId, 'approved');
-    
+    const scheduleId = parseInt(req.params.id, 10);
+    await ScheduleService.approveSchedule(scheduleId, req.user);
     res.json({
       success: true,
       message: 'Duyệt lịch thành công. Lịch đã được public cho toàn bộ nhân viên'
     });
   } catch (error) {
     console.error('Approve schedule error:', error);
+
+    if (error.message === 'Schedule not found') {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch' });
+    }
+    if (error.message === 'Only submitted schedules can be approved') {
+      return res.status(400).json({ success: false, message: 'Chỉ có thể duyệt lịch đã được gửi' });
+    }
+    if (error.message === 'You do not have permission to approve this schedule') {
+      return res.status(403).json({ success: false, message: 'Chỉ phòng KHTH mới có quyền duyệt lịch' });
+    }
     res.status(500).json({
       success: false,
       message: 'Lỗi duyệt lịch',
@@ -495,12 +527,23 @@ const deleteSchedule = async (req, res) => {
       });
     }
     
+    if (schedule.status === 'submitted') {
+      return res.status(400).json({
+        success: false,
+        message: 'Lịch đã gửi KHTH nên không thể xóa'
+      });
+    }
+
     // Check permission
     const userRoles = req.user.roles || [];
     const isAdmin = userRoles.some(r => r.role_code === 'ADMIN');
+    const isSourceDepartment = Number(schedule.source_department_id) === Number(req.user.department_id);
     const isKHTH = schedule.owner_department_id === req.user.department_id;
+
+    const canDeleteDraft = schedule.status === 'draft' && (isSourceDepartment || isAdmin);
+    const canDeleteApproved = schedule.status === 'approved' && (isKHTH || isAdmin);
     
-    if (!isAdmin && !isKHTH) {
+    if (!canDeleteDraft && !canDeleteApproved) {
       return res.status(403).json({
         success: false,
         message: 'Bạn không có quyền xóa lịch này'
@@ -523,6 +566,149 @@ const deleteSchedule = async (req, res) => {
   }
 };
 
+/**
+ * Export consolidated hospital duty schedule PDF by week/year.
+ * GET /schedules/master/export/pdf?week=&year=
+ */
+const exportMasterDutySchedulePdf = async (req, res) => {
+  try {
+    const week = Number(req.query.week);
+    const year = Number(req.query.year);
+
+    if (!Number.isInteger(week) || !Number.isInteger(year)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thiếu hoặc sai định dạng week/year'
+      });
+    }
+
+    const schedules = await Schedule.findAll({
+      schedule_type: 'duty',
+      week,
+      year,
+      status: 'approved'
+    });
+
+    const allShifts = [];
+    for (const schedule of schedules) {
+      const shifts = await Shift.findBySchedule(schedule.schedule_id);
+      for (const shift of shifts) {
+        shift.assignments = await ShiftAssignment.findByShift(shift.shift_id);
+      }
+      allShifts.push(...shifts);
+    }
+
+    const departmentMap = new Map();
+    for (const shift of allShifts) {
+      const departmentId = shift.department_id;
+      const dateKey = String(shift.shift_date).slice(0, 10);
+
+      if (!departmentMap.has(departmentId)) {
+        departmentMap.set(departmentId, {
+          department_id: departmentId,
+          department_name: shift.department_name ?? `Phong ${departmentId}`,
+          department_code: shift.department_code ?? '',
+          dateMap: new Map(),
+        });
+      }
+
+      const department = departmentMap.get(departmentId);
+      if (!department.dateMap.has(dateKey)) {
+        department.dateMap.set(dateKey, []);
+      }
+      department.dateMap.get(dateKey).push(shift);
+    }
+
+    const departments = [...departmentMap.values()].map((department) => ({
+      department_id: department.department_id,
+      department_name: department.department_name,
+      department_code: department.department_code,
+      dates: [...department.dateMap.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, shifts]) => ({ date, shifts })),
+    }));
+
+    const pdfBuffer = await SchedulePdfService.buildDutyPdf({
+      schedule_type: 'duty',
+      week,
+      year,
+      status: 'approved',
+      source_department_name: 'Toàn viện',
+      owner_department_name: 'KHTH',
+      departments,
+    });
+
+    const filename = `Master_Duty_Schedule_Week_${week}_${year}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+
+    return res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Export master duty schedule pdf error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi xuất PDF lịch tổng hợp toàn viện',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Export schedule as PDF
+ * GET /schedules/:id/export/pdf
+ */
+const exportSchedulePdf = async (req, res) => {
+  try {
+    const scheduleId = parseInt(req.params.id, 10);
+
+    if (Number.isNaN(scheduleId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID lịch không hợp lệ'
+      });
+    }
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch'
+      });
+    }
+
+    let pdfBuffer;
+    if (schedule.schedule_type === 'duty') {
+      pdfBuffer = await SchedulePdfService.exportDutySchedule(scheduleId);
+    } else if (schedule.schedule_type === 'weekly_work') {
+      pdfBuffer = await SchedulePdfService.exportWeeklyWorkSchedule(scheduleId);
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Loại lịch không hỗ trợ xuất PDF'
+      });
+    }
+
+    const filenamePrefix = schedule.schedule_type === 'duty'
+      ? 'Duty_Schedule'
+      : 'Weekly_Work_Schedule';
+    const filename = `${filenamePrefix}_Week_${schedule.week}_${schedule.year}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+
+    return res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Export schedule pdf error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi xuất PDF lịch',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllSchedules,
   getScheduleById,
@@ -530,5 +716,7 @@ module.exports = {
   updateSchedule,
   submitSchedule,
   approveSchedule,
-  deleteSchedule
+  deleteSchedule,
+  exportSchedulePdf,
+  exportMasterDutySchedulePdf
 };

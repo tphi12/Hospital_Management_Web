@@ -10,6 +10,7 @@ import {
     FilePdfOutlined,
     FileImageOutlined
 } from "@ant-design/icons";
+import { ROLES } from "../lib/roles";
 import {
     BarChart,
     Bar,
@@ -90,7 +91,7 @@ const Dashboard = () => {
             {showBanner && (
                 <Alert
                     message="Thành công!"
-                    description={`Đăng nhập thành công! Chào mừng ${user.role === 'ADMIN' ? 'Quản trị viên' : user.name}`}
+                    description={`Đăng nhập thành công! Chào mừng ${user.role === ROLES.ADMIN ? 'Quản trị viên' : user.name}`}
                     type="success"
                     showIcon
                     closable

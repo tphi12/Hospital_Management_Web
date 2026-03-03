@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
     InboxOutlined,
     UploadOutlined,
@@ -13,49 +14,80 @@ import {
     Button,
     Card,
     Typography,
-    message,
     Alert,
     Breadcrumb,
     Row,
-    Col
+    Col,
+    App
 } from "antd";
+import { documentService, categoryService } from "../../services";
 
 const { Title, Text, Paragraph } = Typography;
 const { Dragger } = Upload;
 const { Option } = Select;
 
-const CATEGORIES = [
-    { id: 1, name: "Hành chính" },
-    { id: 2, name: "Chuyên môn" },
-    { id: 3, name: "Đào tạo" },
-    { id: 4, name: "Quy trình" },
-];
-
-const DEPARTMENTS = [
-    { id: 1, name: "Khoa Nội" },
-    { id: 2, name: "Khoa Ngoại" },
-    { id: 3, name: "Khoa Sản" },
-    { id: 4, name: "Phòng Tài Chính Kế Toán" },
-    { id: 5, name: "Phòng Kỹ Thuật" },
-];
-
 const DocumentUpload = () => {
+    const { message: messageApi } = App.useApp();
     const [form] = Form.useForm();
     const [fileList, setFileList] = useState([]);
+    const [categories, setCategories] = useState([]);
+    const [uploading, setUploading] = useState(false);
+    const navigate = useNavigate();
 
-    const handleUpload = (values) => {
+    // Fetch categories on component mount
+    const fetchCategories = useCallback(async () => {
+        try {
+            const response = await categoryService.getAllCategories();
+            setCategories(response.data || []);
+        } catch (error) {
+            console.error('Fetch categories error:', error);
+            messageApi.error('Lỗi tải danh mục');
+            setCategories([]);
+        }
+    }, [messageApi]);
+
+    useEffect(() => {
+        fetchCategories();
+    }, [fetchCategories]);
+
+    const handleUpload = async (values) => {
         if (fileList.length === 0) {
-            message.error("Vui lòng chọn file tài liệu!");
+            messageApi.error("Vui lòng chọn file tài liệu!");
             return;
         }
 
-        console.log("Upload values:", values);
-        console.log("File:", fileList[0]);
+        setUploading(true);
 
-        // Mock success
-        message.success("Upload tài liệu thành công!");
-        form.resetFields();
-        setFileList([]);
+        try {
+            const formData = new FormData();
+            formData.append('title', values.title);
+            formData.append('category_id', values.categoryId);
+            if (values.description) {
+                formData.append('description', values.description);
+            }
+            formData.append('file', fileList[0]);
+
+            await documentService.uploadDocument(formData);
+            
+            messageApi.success("Upload tài liệu thành công!");
+            form.resetFields();
+            setFileList([]);
+            
+            setTimeout(() => {
+                try {
+                    navigate('/documents/upload');
+                } catch (navError) {
+                    console.error('Navigation error:', navError);
+                    window.location.href = '/documents/upload';
+                }
+            }, 1500);
+        } catch (error) {
+            console.error('Upload error:', error);
+            const errorMessage = error.response?.data?.message || error.message || "Lỗi upload tài liệu. Vui lòng thử lại!";
+            messageApi.error(errorMessage);
+        } finally {
+            setUploading(false);
+        }
     };
 
     const uploadProps = {
@@ -68,7 +100,7 @@ const DocumentUpload = () => {
         beforeUpload: (file) => {
             const isLt50M = file.size / 1024 / 1024 < 50;
             if (!isLt50M) {
-                message.error('File phải nhỏ hơn 50MB!');
+                messageApi.error('File phải nhỏ hơn 50MB!');
                 return Upload.LIST_IGNORE;
             }
             setFileList([file]); // Allow only 1 file
@@ -99,7 +131,7 @@ const DocumentUpload = () => {
                 <Col xs={24} lg={16}>
                     <Card
                         title={<span className="font-bold">Form tải lên</span>}
-                        bordered={false}
+                        variant="borderless"
                         className="shadow-sm"
                     >
                         <Form
@@ -115,26 +147,25 @@ const DocumentUpload = () => {
                                 <Input placeholder="Nhập tên tài liệu..." />
                             </Form.Item>
 
-                            <Row gutter={16}>
-                                <Col xs={12}>
-                                    <Form.Item
-                                        label="Danh mục"
-                                        name="categoryId"
-                                        rules={[{ required: true, message: 'Vui lòng chọn danh mục' }]}
-                                    >
-                                        <Select placeholder="Chọn danh mục">
-                                            {CATEGORIES.map(c => <Option key={c.id} value={c.id}>{c.name}</Option>)}
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                                <Col xs={12}>
-                                    <Form.Item label="Phòng ban" name="deptId">
-                                        <Select placeholder="Chọn phòng ban">
-                                            {DEPARTMENTS.map(d => <Option key={d.id} value={d.id}>{d.name}</Option>)}
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                            </Row>
+                            <Form.Item
+                                label="Danh mục"
+                                name="categoryId"
+                                rules={[{ required: true, message: 'Vui lòng chọn danh mục' }]}
+                            >
+                                <Select 
+                                    placeholder="Chọn danh mục"
+                                    showSearch
+                                    filterOption={(input, option) =>
+                                        (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                                    }
+                                >
+                                    {categories.map(cat => (
+                                        <Option key={cat.category_id} value={cat.category_id}>
+                                            {cat.category_name}
+                                        </Option>
+                                    ))}
+                                </Select>
+                            </Form.Item>
 
                             <Form.Item label="Mô tả" name="description">
                                 <Input.TextArea placeholder="Mô tả ngắn gọn..." rows={3} />
@@ -153,8 +184,15 @@ const DocumentUpload = () => {
                             </Form.Item>
 
                             <Form.Item className="mb-0 text-right">
-                                <Button type="primary" htmlType="submit" size="large" icon={<CloudUploadOutlined />}>
-                                    Upload Tài liệu
+                                <Button 
+                                    type="primary" 
+                                    htmlType="submit" 
+                                    size="large" 
+                                    icon={<CloudUploadOutlined />}
+                                    loading={uploading}
+                                    disabled={uploading}
+                                >
+                                    {uploading ? 'Đang upload...' : 'Upload Tài liệu'}
                                 </Button>
                             </Form.Item>
                         </Form>
@@ -164,7 +202,7 @@ const DocumentUpload = () => {
                 <Col xs={24} lg={8}>
                     <Card
                         className="bg-blue-50 border-blue-100 shadow-sm"
-                        bordered={false}
+                        variant="borderless"
                     >
                         <div className="flex items-center gap-2 mb-4 text-blue-700">
                             <InfoCircleOutlined className="text-xl" />

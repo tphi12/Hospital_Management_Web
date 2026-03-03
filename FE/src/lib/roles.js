@@ -7,7 +7,7 @@ export const ROLES = {
   HEAD_OF_DEPT: "HEAD_OF_DEPT",       // Trưởng Phòng
   DEPT_CLERK: "DEPT_CLERK",           // Văn Thư Phòng Ban
   STAFF: "STAFF",                     // Nhân Viên
-  KHTH: "KHTH",                       // Kế Hoạch Tổng Hợp
+  KHTH: "KHTH",                       // STAFF thuộc phòng KHTH 
 };
 
 /**
@@ -40,8 +40,8 @@ export const ROLE_DETAILS = {
     color: "bg-green-100 text-green-700",
   },
   [ROLES.KHTH]: {
-    label: "Kế hoạch Tổng hợp",
-    description: "Quản lý và ban hành lịch trực toàn bệnh viện.",
+    label: "KHTH",
+    description: "Người dùng STAFF thuộc phòng KHTH, có quyền nghiệp vụ KHTH.",
     color: "bg-cyan-100 text-cyan-700",
   },
 };

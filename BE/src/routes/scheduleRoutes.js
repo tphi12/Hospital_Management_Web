@@ -9,6 +9,8 @@ router.use(auth);
 
 // Get schedules (all authenticated users can view approved schedules)
 router.get('/', scheduleController.getAllSchedules);
+router.get('/master/export/pdf', scheduleController.exportMasterDutySchedulePdf);
+router.get('/:id/export/pdf', scheduleController.exportSchedulePdf);
 router.get('/:id', scheduleController.getScheduleById);
 
 // Create schedule (Department clerk or KHTH)

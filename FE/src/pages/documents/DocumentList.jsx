@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     SearchOutlined,
     EyeOutlined,
     DownloadOutlined,
     EditOutlined,
+    DeleteOutlined,
     FilePdfOutlined,
     FileExcelOutlined,
     FileWordOutlined,
@@ -16,6 +17,7 @@ import {
     Table,
     Button,
     Input,
+    Select,
     Tag,
     Space,
     Tooltip,
@@ -23,81 +25,59 @@ import {
     Card,
     Breadcrumb,
     Typography,
-    message,
     Form,
     Row,
     Col,
-    Descriptions
+    Descriptions,
+    Spin,
+    Popconfirm,
+    App
 } from "antd";
+import { documentService, categoryService } from "../../services";
 
 const { Title, Text } = Typography;
 const { Search } = Input;
 
-/**
- * Mock Data
- */
-const MOCK_DOCS = [
-    {
-        id: "KH_092023",
-        title: "Kế hoạch khám sức khỏe định kỳ quý 3",
-        creator: "Trần Văn Trọng",
-        department: "Phòng Kế Hoạch",
-        section: "Tổ Kế Hoạch 1",
-        description: "Kế hoạch chi tiết phục vụ cán bộ nhân viên toàn viện.",
-        file_path: "ke_hoach_kham_sk_q3.pdf",
-        created_at: "25/08/2025",
-        status: "approved",
-        format: "PDF",
-        keywords: "kham-suc-khoe, quy-3, ke-hoach"
-    },
-    {
-        id: "BC_TC_2025",
-        title: "Báo cáo tài chính năm 2025",
-        creator: "Phạm Thị Hương",
-        department: "Phòng Tài Chính",
-        section: "Tổ Kế Toán",
-        description: "Báo cáo tổng kết thu chi năm 2025.",
-        file_path: "bao_cao_tai_chinh.xlsx",
-        created_at: "10/01/2026",
-        status: "pending",
-        format: "Excel",
-        keywords: "tai-chinh, bao-cao, nam-2025"
-    },
-    {
-        id: "QT_01",
-        title: "Quy trình tiếp nhận bệnh nhân cấp cứu",
-        creator: "Nguyễn Văn A",
-        department: "Khoa Cấp Cứu",
-        section: "Hành chính khoa",
-        description: "Quy trình chuẩn ISO về tiếp nhận bệnh nhân.",
-        file_path: "quy_trinh_cc.docx",
-        created_at: "15/09/2025",
-        status: "rejected",
-        format: "Word",
-        keywords: "quy-trinh, cap-cuu, benh-nhan"
-    },
-    {
-        id: "HD_SD_MAY",
-        title: "Hướng dẫn sử dụng máy X-Quang mới",
-        creator: "Lê Gia Nam",
-        department: "Khoa Hình Ảnh",
-        section: "Kỹ thuật",
-        description: "Tài liệu trainning cho máy X-Quang KTS.",
-        file_path: "hd_xquang.pdf",
-        created_at: "20/01/2026",
-        status: "approved",
-        format: "PDF",
-        keywords: "huong-dan, x-quang, may-moi"
-    },
-];
-
 const DocumentList = () => {
-    const [documents, setDocuments] = useState(MOCK_DOCS);
+    const { message: messageApi } = App.useApp();
+    const [documents, setDocuments] = useState([]);
+    const [categories, setCategories] = useState([]);
+    const [loading, setLoading] = useState(false);
     const [searchText, setSearchText] = useState("");
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [currentDoc, setCurrentDoc] = useState(null);
     const [form] = Form.useForm();
+
+    // Fetch documents and categories on component mount
+    const fetchDocuments = useCallback(async (searchTerm = "") => {
+        setLoading(true);
+        try {
+            const response = await documentService.getAllDocuments({ search: searchTerm });
+            setDocuments(response.data || []);
+        } catch (error) {
+            console.error('Fetch documents error:', error);
+            messageApi.error('Lỗi tải danh sách tài liệu');
+            setDocuments([]); 
+        } finally {
+            setLoading(false);
+        }
+    }, [messageApi]);
+
+    const fetchCategories = useCallback(async () => {
+        try {
+            const response = await categoryService.getAllCategories();
+            setCategories(response.data || []);
+        } catch (error) {
+            console.error('Fetch categories error:', error);
+            setCategories([]);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchDocuments();
+        fetchCategories();
+    }, [fetchDocuments, fetchCategories]);
 
     const handleView = (doc) => {
         setCurrentDoc(doc);
@@ -110,18 +90,111 @@ const DocumentList = () => {
         setIsEditModalOpen(true);
     };
 
-    const handleUpdate = () => {
-        form.validateFields().then(values => {
-            setDocuments(documents.map(d => d.id === currentDoc.id ? { ...d, ...values } : d));
-            message.success("Cập nhật tài liệu thành công!");
+    const handleUpdate = async () => {
+        try {
+            const values = await form.validateFields();
+            const formData = new FormData();
+            formData.append('title', values.title);
+            formData.append('category_id', values.category_id);
+            
+            await documentService.updateDocument(currentDoc.document_id, formData);
+            messageApi.success("Cập nhật tài liệu thành công!");
             setIsEditModalOpen(false);
-        });
+            fetchDocuments(searchText);
+        } catch (error) {
+            console.error('Update error:', error);
+            messageApi.error('Lỗi cập nhật tài liệu');
+        }
+    };
+
+    const handleDelete = async (id) => {
+        try {
+            await documentService.deleteDocument(id);
+            messageApi.success('Xóa tài liệu thành công');
+            fetchDocuments(searchText);
+        } catch (error) {
+            console.error('Delete error:', error);
+            messageApi.error(error.response?.data?.message || 'Lỗi xóa tài liệu');
+        }
+    };
+
+    const handleDownload = async (doc) => {
+        if (!doc.document_id) {
+            messageApi.warning('Không tìm thấy tài liệu');
+            return;
+        }
+
+        const hideLoading = messageApi.loading('Đang tải file...', 0);
+        
+        try {
+            // Download through backend API to avoid CORS
+            const token = localStorage.getItem('token');
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+            const downloadUrl = `${apiUrl}/documents/${doc.document_id}/download`;
+            
+            console.log('Downloading from:', downloadUrl);
+            
+            // Fetch with authorization
+            const response = await fetch(downloadUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            console.log('Response status:', response.status, response.statusText);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Download error response:', errorText);
+                throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+            }
+            
+            // Get blob from response
+            const blob = await response.blob();
+            console.log('Blob size:', blob.size, 'type:', blob.type);
+            
+            // Create download URL
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = doc.file_name || 'document';
+            link.style.display = 'none';
+            
+            document.body.appendChild(link);
+            link.click();
+            
+            // Cleanup after a short delay
+            setTimeout(() => {
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(blobUrl);
+            }, 100);
+            
+            hideLoading();
+            messageApi.success('Tải file thành công!');
+        } catch (error) {
+            hideLoading();
+            console.error('Download error:', error);
+            
+            // Check if it's a network error
+            if (error.message.includes('Failed to fetch')) {
+                messageApi.error('Không thể kết nối đến server. Vui lòng kiểm tra xem backend đang chạy?');
+            } else {
+                messageApi.error(`Lỗi tải file: ${error.message}`);
+            }
+        }
+    };
+
+    const handleSearch = () => {
+        fetchDocuments(searchText);
     };
 
     const getFileIcon = (path) => {
-        if (path.endsWith('.pdf')) return <FilePdfOutlined className="text-red-500 text-xl" />;
-        if (path.endsWith('.xls') || path.endsWith('.xlsx')) return <FileExcelOutlined className="text-green-600 text-xl" />;
-        if (path.endsWith('.doc') || path.endsWith('.docx')) return <FileWordOutlined className="text-blue-600 text-xl" />;
+        if (!path) return <FileOutlined className="text-gray-500 text-xl" />;
+        const lowerPath = path.toLowerCase();
+        if (lowerPath.endsWith('.pdf')) return <FilePdfOutlined className="text-red-500 text-xl" />;
+        if (lowerPath.endsWith('.xls') || lowerPath.endsWith('.xlsx')) return <FileExcelOutlined className="text-green-600 text-xl" />;
+        if (lowerPath.endsWith('.doc') || lowerPath.endsWith('.docx')) return <FileWordOutlined className="text-blue-600 text-xl" />;
         return <FileOutlined className="text-orange-500 text-xl" />;
     };
 
@@ -134,10 +207,16 @@ const DocumentList = () => {
         }
     };
 
-    const filteredData = documents.filter(doc =>
-        doc.title.toLowerCase().includes(searchText.toLowerCase()) ||
-        doc.creator.toLowerCase().includes(searchText.toLowerCase())
-    );
+    const formatDate = (dateString) => {
+        if (!dateString) return '-';
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return '-';
+            return date.toLocaleDateString('vi-VN');
+        } catch {
+            return '-';
+        }
+    };
 
     const columns = [
         {
@@ -145,30 +224,37 @@ const DocumentList = () => {
             key: 'title',
             render: (_, record) => (
                 <Space>
-                    {getFileIcon(record.file_path)}
+                    {getFileIcon(record.file_name || record.file_path)}
                     <div>
                         <Text strong className="block">{record.title}</Text>
-                        <Text type="secondary" className="text-xs">{record.file_path}</Text>
+                        <Text type="secondary" className="text-xs">{record.file_name}</Text>
                     </div>
                 </Space>
             ),
         },
         {
             title: 'Người tạo',
-            dataIndex: 'creator',
-            key: 'creator',
-            render: (text) => <Text>{text}</Text>,
+            key: 'uploaded_by',
+            render: (_, record) => <Text>{record.uploaded_by_name || '-'}</Text>,
         },
         {
             title: 'Phòng ban',
-            dataIndex: 'department',
-            key: 'department',
+            dataIndex: 'department_name',
+            key: 'department_name',
+            render: (text) => text || '-',
+        },
+        {
+            title: 'Danh mục',
+            dataIndex: 'category_name',
+            key: 'category_name',
+            render: (text) => text || '-',
         },
         {
             title: 'Ngày tạo',
             dataIndex: 'created_at',
             key: 'created_at',
             align: 'center',
+            render: (date) => formatDate(date),
         },
         {
             title: 'Trạng thái',
@@ -190,8 +276,20 @@ const DocumentList = () => {
                         <Button type="text" icon={<EditOutlined />} className="text-orange-500" onClick={() => handleEdit(record)} />
                     </Tooltip>
                     <Tooltip title="Tải xuống">
-                        <Button type="text" icon={<DownloadOutlined />} className="text-green-600" onClick={() => message.info(`Đang tải ${record.file_path}...`)} />
+                        <Button type="text" icon={<DownloadOutlined />} className="text-green-600" onClick={() => handleDownload(record)} />
                     </Tooltip>
+                    <Popconfirm
+                        title="Xóa tài liệu"
+                        description="Bạn có chắc chắn muốn xóa tài liệu này?"
+                        onConfirm={() => handleDelete(record.document_id)}
+                        okText="Xóa"
+                        cancelText="Hủy"
+                        okButtonProps={{ danger: true }}
+                    >
+                        <Tooltip title="Xóa">
+                            <Button type="text" icon={<DeleteOutlined />} className="text-red-500" />
+                        </Tooltip>
+                    </Popconfirm>
                 </Space>
             ),
         },
@@ -214,26 +312,33 @@ const DocumentList = () => {
                 </div>
             </div>
 
-            <Card bordered={false} className="shadow-sm flex-1 flex flex-col overflow-hidden" bodyStyle={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <Card 
+                variant="borderless" 
+                className="shadow-sm flex-1 flex flex-col overflow-hidden" 
+                styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', height: '100%' } }}
+            >
                 <div className="p-4 border-b border-slate-100 flex justify-between items-center">
                     <Search
                         placeholder="Tìm kiếm tài liệu..."
                         allowClear
                         enterButton={<SearchOutlined />}
                         size="middle"
+                        onSearch={handleSearch}
                         onChange={(e) => setSearchText(e.target.value)}
                         style={{ width: 400 }}
                     />
                 </div>
 
-                <Table
-                    columns={columns}
-                    dataSource={filteredData}
-                    rowKey="id"
-                    pagination={{ pageSize: 8, position: ['bottomCenter'] }}
-                    scroll={{ y: 'calc(100vh - 300px)' }}
-                    className="flex-1"
-                />
+                <Spin spinning={loading}>
+                    <Table
+                        columns={columns}
+                        dataSource={documents}
+                        rowKey="document_id"
+                        pagination={{ pageSize: 8, placement: ['bottomCenter'] }}
+                        scroll={{ y: 'calc(100vh - 300px)' }}
+                        className="flex-1"
+                    />
+                </Spin>
             </Card>
 
             {/* View Modal */}
@@ -248,17 +353,26 @@ const DocumentList = () => {
             >
                 {currentDoc && (
                     <Descriptions bordered column={1} size="small" labelStyle={{ width: '150px', fontWeight: 'bold' }}>
-                        <Descriptions.Item label="ID Tài liệu">{currentDoc.id}</Descriptions.Item>
+                        <Descriptions.Item label="ID Tài liệu">{currentDoc.document_id}</Descriptions.Item>
                         <Descriptions.Item label="Tiêu đề">{currentDoc.title}</Descriptions.Item>
-                        <Descriptions.Item label="Phòng ban">{currentDoc.department}</Descriptions.Item>
-                        <Descriptions.Item label="Tổ / Bộ phận">{currentDoc.section}</Descriptions.Item>
+                        <Descriptions.Item label="Phòng ban">{currentDoc.department_name || '-'}</Descriptions.Item>
+                        <Descriptions.Item label="Danh mục">{currentDoc.category_name || '-'}</Descriptions.Item>
                         <Descriptions.Item label="Trạng thái">{getStatusTag(currentDoc.status)}</Descriptions.Item>
-                        <Descriptions.Item label="Định dạng">{currentDoc.format}</Descriptions.Item>
-                        <Descriptions.Item label="Mô tả">{currentDoc.description}</Descriptions.Item>
-                        <Descriptions.Item label="Từ khóa">
-                            {currentDoc.keywords.split(',').map((tag, i) => (
-                                <Tag key={i} color="blue">{tag.trim()}</Tag>
-                            ))}
+                        <Descriptions.Item label="File">{currentDoc.file_name}</Descriptions.Item>
+                        <Descriptions.Item label="Kích thước">{currentDoc.file_size ? `${(currentDoc.file_size / 1024 / 1024).toFixed(2)} MB` : '-'}</Descriptions.Item>
+                        <Descriptions.Item label="Người tải lên">{currentDoc.uploaded_by_name}</Descriptions.Item>
+                        <Descriptions.Item label="Ngày tạo">{formatDate(currentDoc.created_at)}</Descriptions.Item>
+                        <Descriptions.Item label="Người duyệt">{currentDoc.approved_by_name || '-'}</Descriptions.Item>
+                        <Descriptions.Item label="Ngày duyệt">{formatDate(currentDoc.approved_at)}</Descriptions.Item>
+                        <Descriptions.Item label="File URL">
+                            <Button 
+                                type="link" 
+                                size="small" 
+                                icon={<DownloadOutlined />}
+                                onClick={() => handleDownload(currentDoc)}
+                            >
+                                Tải xuống
+                            </Button>
                         </Descriptions.Item>
                     </Descriptions>
                 )}
@@ -274,20 +388,23 @@ const DocumentList = () => {
                 cancelText="Hủy"
             >
                 <Form form={form} layout="vertical">
-                    <Form.Item name="title" label="Tên tài liệu" rules={[{ required: true }]}>
-                        <Input />
+                    <Form.Item name="title" label="Tên tài liệu" rules={[{ required: true, message: 'Vui lòng nhập tên tài liệu' }]}>
+                        <Input placeholder="Nhập tên tài liệu" />
                     </Form.Item>
-                    <Form.Item name="department" label="Phòng ban">
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="section" label="Tổ / Bộ phận">
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="description" label="Mô tả">
-                        <Input.TextArea rows={3} />
-                    </Form.Item>
-                    <Form.Item name="keywords" label="Từ khóa">
-                        <Input placeholder="Ngăn cách bằng dấu phẩy" />
+                    <Form.Item name="category_id" label="Danh mục" rules={[{ required: true, message: 'Vui lòng chọn danh mục' }]}>
+                        <Select 
+                            placeholder="Chọn danh mục"
+                            showSearch
+                            filterOption={(input, option) =>
+                                (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                            }
+                        >
+                            {categories.map(cat => (
+                                <Select.Option key={cat.category_id} value={cat.category_id}>
+                                    {cat.category_name}
+                                </Select.Option>
+                            ))}
+                        </Select>
                     </Form.Item>
                 </Form>
             </Modal>

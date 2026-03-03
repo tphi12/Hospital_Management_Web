@@ -2,6 +2,7 @@ const Document = require('../models/Document');
 const Category = require('../models/Category');
 const { uploadFileToBlob, deleteFileFromBlob } = require('../config/azureStorage');
 const { generateFileName } = require('../middleware/upload');
+const https = require('https');
 
 /**
  * @swagger
@@ -588,6 +589,72 @@ const getMyDocuments = async (req, res) => {
   }
 };
 
+/**
+ * @swagger
+ * /documents/{id}/download:
+ *   get:
+ *     tags: [Documents]
+ *     summary: Tải xuống tài liệu
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Tải file thành công
+ */
+const downloadDocument = async (req, res) => {
+  try {
+    const documentId = req.params.id;
+    const document = await Document.findById(documentId);
+    
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy tài liệu'
+      });
+    }
+    
+    // Fetch file from Azure Blob and stream to client
+    // This avoids CORS issues by proxying through our backend
+    try {
+      // Set appropriate headers for file download
+      res.setHeader('Content-Type', document.file_type || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(document.file_name)}"`);
+      
+      // Stream file from Azure Blob to client
+      https.get(document.file_path, (fileStream) => {
+        fileStream.pipe(res);
+      }).on('error', (fetchError) => {
+        console.error('Error fetching file from Azure:', fetchError);
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            message: 'Lỗi tải file từ storage'
+          });
+        }
+      });
+      
+    } catch (fetchError) {
+      console.error('Error fetching file from Azure:', fetchError);
+      return res.status(500).json({
+        success: false,
+        message: 'Lỗi tải file từ storage'
+      });
+    }
+    
+  } catch (error) {
+    console.error('Download document error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi tải tài liệu',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllDocuments,
   getDocumentById,
@@ -597,5 +664,6 @@ module.exports = {
   rejectDocument,
   deleteDocument,
   getDocumentStats,
-  getMyDocuments
+  getMyDocuments,
+  downloadDocument
 };
