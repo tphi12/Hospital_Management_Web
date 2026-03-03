@@ -16,11 +16,12 @@ import DocumentUpload from "./pages/documents/DocumentUpload";
 import DocumentList from "./pages/documents/DocumentList";
 import { DocumentApprovals } from "./pages/documents/DocumentPages";
 import MySchedule from "./pages/schedule/MySchedule";
-import DutySchedule from "./pages/schedule/DutySchedule";
+import DutyScheduleClerkPage from "./pages/schedule/DutyScheduleClerkPage";
+import DutyScheduleStaffPage from "./pages/schedule/DutyScheduleStaffPage";
 import WeeklySchedule from "./pages/schedule/WeeklySchedule";
 import Profile from "./pages/Profile";
 
-import { ConfigProvider } from "antd";
+import { ConfigProvider, App as AntdApp } from "antd";
 
 function App() {
   return (
@@ -32,7 +33,8 @@ function App() {
         },
       }}
     >
-      <AuthProvider>
+      <AntdApp>
+        <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
 
@@ -105,7 +107,7 @@ function App() {
             <Route
               path="/documents/approvals"
               element={
-                <ProtectedRoute allowedRoles={[ROLES.HEAD_OF_DEPT]}>
+                <ProtectedRoute allowedRoles={[ROLES.HEAD_OF_DEPT, ROLES.ADMIN]}>
                   <DocumentApprovals />
                 </ProtectedRoute>
               }
@@ -131,24 +133,24 @@ function App() {
             <Route
               path="/schedule/department"
               element={
-                <ProtectedRoute allowedRoles={[ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.KHTH, ROLES.ADMIN]}>
-                  <DutySchedule role="CLERK" />
+                <ProtectedRoute allowedRoles={[ROLES.DEPT_CLERK]}>
+                  <DutyScheduleClerkPage />
                 </ProtectedRoute>
               }
             />
             <Route
               path="/schedule/master"
               element={
-                <ProtectedRoute allowedRoles={[ROLES.KHTH, ROLES.ADMIN, ROLES.STAFF, ROLES.HEAD_OF_DEPT, ROLES.DEPT_CLERK, ROLES.HOSPITAL_CLERK]}>
-                  <DutySchedule role="ADMIN" />
+                <ProtectedRoute allowedRoles={[ROLES.KHTH, ROLES.ADMIN]}>
+                  <DutyScheduleStaffPage />
                 </ProtectedRoute>
               }
             />
             <Route
               path="/schedule/weekly"
               element={
-                <ProtectedRoute allowedRoles={[ROLES.KHTH, ROLES.ADMIN, ROLES.STAFF, ROLES.HEAD_OF_DEPT, ROLES.DEPT_CLERK, ROLES.HOSPITAL_CLERK]}>
-                  <WeeklySchedule role="ADMIN" />
+                <ProtectedRoute allowedRoles={[ROLES.KHTH]}>
+                  <WeeklySchedule role={ROLES.ADMIN} />
                 </ProtectedRoute>
               }
             />
@@ -156,6 +158,7 @@ function App() {
           </Route>
         </Routes>
       </AuthProvider>
+      </AntdApp>
     </ConfigProvider>
   );
 }

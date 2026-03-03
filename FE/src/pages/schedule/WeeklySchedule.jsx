@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Calendar, Printer, Edit, Save, Plus } from "lucide-react";
+import { ROLES } from "../../lib/roles";
 
 import { INITIAL_WEEKLY_DATA } from "../../lib/mockScheduleData";
 
@@ -62,7 +63,7 @@ const WeeklySchedule = ({ role = "VIEWER" }) => {
                         <p className="text-slate-500 font-medium mt-1">Tuần 32 - Từ ngày 04/08/2025 đến ngày 10/08/2025</p>
                     </div>
                     <div className="flex gap-2 shrink-0 no-print">
-                        {(role === "ADMIN" || role === "KHTH") && (
+                        {(role === ROLES.ADMIN || role === ROLES.KHTH) && (
                             !isEditing ? (
                                 <button
                                     onClick={() => setIsEditing(true)}

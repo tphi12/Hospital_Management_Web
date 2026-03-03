@@ -6,13 +6,14 @@ import {
     EditOutlined, SaveOutlined, BankOutlined
 } from "@ant-design/icons";
 import {
-    Card, Avatar, Button, Tabs, Form, Input, Row, Col, Typography, Tag, Divider, Upload, message, Breadcrumb
+    Card, Avatar, Button, Tabs, Form, Input, Row, Col, Typography, Tag, Divider, Upload, Breadcrumb, Space, App
 } from "antd";
 
 const { Title, Text, Paragraph } = Typography;
 
 const Profile = () => {
     const { user, updateUser } = useAuth();
+    const { message: messageApi } = App.useApp();
     const [form] = Form.useForm();
     const [activeTab, setActiveTab] = useState("info");
 
@@ -24,7 +25,7 @@ const Profile = () => {
             ...values,
             avatar
         });
-        message.success("Cập nhật thông tin thành công!");
+        messageApi.success("Cập nhật thông tin thành công!");
         setActiveTab("info");
     };
 
@@ -140,7 +141,7 @@ const Profile = () => {
                                     // Mock upload
                                     if (info.file) {
                                         // In real app, read file
-                                        message.success("Đã thay đổi ảnh đại diện (Demo)");
+                                        messageApi.success("Đã thay đổi ảnh đại diện (Demo)");
                                     }
                                 }}
                             >

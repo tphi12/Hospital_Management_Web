@@ -1,0 +1,295 @@
+/**
+ * scheduleApi.ts
+ * Typed API layer for the Schedule module.
+ *
+ * Uses the shared axios instance (apiClient) from src/services/api.js.
+ * Every function wraps the request in a try/catch and returns a typed
+ * ApiResponse<T> so callers never need to handle raw AxiosError.
+ */
+
+import apiClient from '../../../services/api';
+import type { AxiosResponse } from 'axios';
+
+// Import domain types for use in payloads and re-export for consumers.
+import type {
+  ScheduleType,
+  ScheduleStatus,
+  ShiftType,
+  Schedule,
+  Shift,
+  ShiftAssignment,
+  WeeklyWorkItem,
+} from '../types';
+
+export type {
+  ScheduleType,
+  ScheduleStatus,
+  ShiftType,
+  Schedule,
+  Shift,
+  ShiftAssignment,
+  WeeklyWorkItem,
+};
+
+// ─── Request payloads ─────────────────────────────────────────────────────────
+
+export interface CreateDutySchedulePayload {
+  week:         number;
+  year:         number;
+  description?: string;
+  /** Source department; the backend derives from authenticated user if omitted */
+  department_id?: number;
+}
+
+export interface AddShiftPayload {
+  schedule_id:   number;
+  department_id: number;
+  shift_date:    string;        // YYYY-MM-DD
+  shift_type:    ShiftType;
+  start_time:    string;        // HH:MM
+  end_time:      string;
+  max_staff:     number;
+  notes?:        string;
+  staff_ids?:    number[];
+}
+
+export interface AssignUserToShiftPayload {
+  shift_id: number;
+  user_id:  number;
+  note?:    string;
+}
+
+export interface AddWeeklyWorkItemPayload {
+  schedule_id:   number;
+  work_date:     string;        // YYYY-MM-DD
+  content:       string;
+  location?:     string;
+  participants?: string;
+}
+
+// ─── Response wrapper ─────────────────────────────────────────────────────────
+
+export interface ApiResponse<T = unknown> {
+  success:  boolean;
+  data?:    T;
+  message?: string;
+  error?:   string;
+}
+
+// ─── Internal helper ──────────────────────────────────────────────────────────
+
+async function request<T>(
+  call: () => Promise<AxiosResponse<ApiResponse<T>>>,
+): Promise<ApiResponse<T>> {
+  try {
+    const res = await call();
+    return res.data;
+  } catch (err: unknown) {
+    // Axios wraps HTTP error responses in err.response.data
+    if (
+      err !== null &&
+      typeof err === 'object' &&
+      'response' in err &&
+      err.response !== null &&
+      typeof err.response === 'object' &&
+      'data' in err.response
+    ) {
+      return err.response.data as ApiResponse<T>;
+    }
+    return {
+      success: false,
+      message: err instanceof Error ? err.message : 'An unexpected error occurred',
+    };
+  }
+}
+
+// ─── Schedule API ─────────────────────────────────────────────────────────────
+
+/**
+ * Fetch all schedules matching a given week, year and optional type.
+ *
+ * GET /schedules?week=&year=&schedule_type=
+ */
+export async function getSchedulesByWeek(
+  week: number,
+  year: number,
+  type?: ScheduleType,
+): Promise<ApiResponse<Schedule[]>> {
+  return request(() =>
+    apiClient.get('/schedules', {
+      params: {
+        week,
+        year,
+        ...(type ? { schedule_type: type } : {}),
+      },
+    }),
+  );
+}
+
+/**
+ * Create a new duty schedule for the authenticated user's department.
+ *
+ * POST /schedules
+ */
+export async function createDutySchedule(
+  data: CreateDutySchedulePayload,
+): Promise<ApiResponse<Schedule>> {
+  return request(() =>
+    apiClient.post('/schedules', { ...data, schedule_type: 'duty' }),
+  );
+}
+
+/**
+ * Submit a draft duty schedule to KHTH for approval.
+ *
+ * PATCH /schedules/:id/submit
+ */
+export async function submitSchedule(
+  id: number,
+): Promise<ApiResponse<void>> {
+  return request(() => apiClient.patch(`/schedules/${id}/submit`));
+}
+
+/**
+ * Approve a submitted schedule (KHTH department only).
+ *
+ * PATCH /schedules/:id/approve
+ */
+export async function approveSchedule(
+  id: number,
+): Promise<ApiResponse<void>> {
+  return request(() => apiClient.patch(`/schedules/${id}/approve`));
+}
+
+/**
+ * Add a shift to an existing duty schedule.
+ *
+ * POST /shifts
+ */
+export async function addShift(
+  data: AddShiftPayload,
+): Promise<ApiResponse<Shift>> {
+  return request(() => apiClient.post('/shifts', data));
+}
+
+/**
+ * Assign a user to a specific shift.
+ *
+ * POST /shifts/:shiftId/assign
+ */
+export async function assignUserToShift(
+  data: AssignUserToShiftPayload,
+): Promise<ApiResponse<ShiftAssignment>> {
+  const { shift_id, ...body } = data;
+  return request(() => apiClient.post(`/shifts/${shift_id}/assign`, body));
+}
+
+/**
+ * Fetch all weekly_work schedules for a given week / year.
+ *
+ * GET /schedules?week=&year=&schedule_type=weekly_work
+ */
+export async function getWeeklyWorkSchedule(
+  week: number,
+  year: number,
+): Promise<ApiResponse<Schedule[]>> {
+  return request(() =>
+    apiClient.get('/schedules', {
+      params: { week, year, schedule_type: 'weekly_work' },
+    }),
+  );
+}
+
+/**
+ * Add a work item entry to a weekly_work schedule.
+ *
+ * POST /schedules/:scheduleId/work-items
+ */
+export async function addWeeklyWorkItem(
+  data: AddWeeklyWorkItemPayload,
+): Promise<ApiResponse<WeeklyWorkItem>> {
+  const { schedule_id, ...body } = data;
+  return request(() =>
+    apiClient.post(`/schedules/${schedule_id}/work-items`, body),
+  );
+}
+
+/**
+ * Export a schedule as a PDF and return the raw Blob.
+ * The caller is responsible for triggering a browser download.
+ *
+ * GET /schedules/:scheduleId/export/pdf
+ *
+ * @example
+ * const res = await exportSchedulePdf(42);
+ * if (res.success && res.data) {
+ *   const url = URL.createObjectURL(res.data);
+ *   const a   = document.createElement('a');
+ *   a.href    = url;
+ *   a.download = `schedule-${42}.pdf`;
+ *   a.click();
+ *   URL.revokeObjectURL(url);
+ * }
+ */
+export async function exportSchedulePdf(
+  scheduleId: number,
+): Promise<ApiResponse<Blob>> {
+  try {
+    const res = await apiClient.get<Blob>(
+      `/schedules/${scheduleId}/export/pdf`,
+      { responseType: 'blob' },
+    );
+    return { success: true, data: res.data };
+  } catch (err: unknown) {
+    if (
+      err !== null &&
+      typeof err === 'object' &&
+      'response' in err &&
+      err.response !== null &&
+      typeof err.response === 'object' &&
+      'data' in err.response
+    ) {
+      return err.response.data as ApiResponse<Blob>;
+    }
+    return {
+      success: false,
+      message: err instanceof Error ? err.message : 'Export failed',
+    };
+  }
+}
+
+/**
+ * Export consolidated duty schedule PDF of all approved departments in a week.
+ *
+ * GET /schedules/master/export/pdf?week=&year=
+ */
+export async function exportMasterDutySchedulePdf(
+  week: number,
+  year: number,
+): Promise<ApiResponse<Blob>> {
+  try {
+    const res = await apiClient.get<Blob>(
+      '/schedules/master/export/pdf',
+      {
+        params: { week, year },
+        responseType: 'blob',
+      },
+    );
+    return { success: true, data: res.data };
+  } catch (err: unknown) {
+    if (
+      err !== null &&
+      typeof err === 'object' &&
+      'response' in err &&
+      err.response !== null &&
+      typeof err.response === 'object' &&
+      'data' in err.response
+    ) {
+      return err.response.data as ApiResponse<Blob>;
+    }
+    return {
+      success: false,
+      message: err instanceof Error ? err.message : 'Export failed',
+    };
+  }
+}

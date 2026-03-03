@@ -35,13 +35,21 @@ app.use(cors({
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: {
     success: false,
     message: 'Quá nhiều request từ IP này, vui lòng thử lại sau'
   }
 });
 
-app.use('/api/', limiter);
+const rateLimitEnabled =
+  process.env.ENABLE_RATE_LIMIT === 'true' ||
+  process.env.NODE_ENV === 'production';
+
+if (rateLimitEnabled) {
+  app.use('/api/', limiter);
+}
 
 // Body parser
 app.use(express.json({ limit: '10mb' }));
@@ -126,7 +134,12 @@ const startServer = async () => {
     }
     
     // Initialize Azure Storage
-    await initAzureStorage();
+    const azureConnected = await initAzureStorage();
+    if (!azureConnected) {
+      console.warn('⚠️  Warning: Azure Storage initialization failed. Document upload will not work.');
+      console.warn('⚠️  Please check your Azure Storage configuration in .env file.');
+      // Don't exit - allow server to run but with limited functionality
+    }
     
     // Start server
     app.listen(PORT, () => {
