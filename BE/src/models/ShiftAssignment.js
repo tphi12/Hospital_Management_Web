@@ -17,11 +17,15 @@ class ShiftAssignment {
       status = 'assigned',
       note
     } = assignmentData;
+
+    const params = [shift_id, user_id, status, note].map((value) =>
+      value === undefined ? null : value
+    );
     
     const [result] = await pool.execute(
       `INSERT INTO SHIFT_ASSIGNMENT (shift_id, user_id, status, assigned_at, note)
        VALUES (?, ?, ?, NOW(), ?)`,
-      [shift_id, user_id, status, note]
+      params
     );
     
     return result.insertId;

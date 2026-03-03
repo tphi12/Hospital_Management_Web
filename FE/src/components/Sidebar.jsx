@@ -14,6 +14,7 @@ import { Menu, Spin } from "antd";
 import hospitalLogoLarge from "../assets/hospital-logo-large.png";
 import { useAuth } from "../hooks/useAuth";
 import { getEffectiveRoleCodes, isHospitalScope } from "../lib/roleUtils";
+import { ROLES } from "../lib/roles";
 
 const MENU_CONFIG = [
     {
@@ -23,16 +24,16 @@ const MENU_CONFIG = [
                 label: "Tổng quan",
                 path: "/",
                 icon: <LayoutDashboard size={18} />,
-                allowedRoles: ["ADMIN", "STAFF", "CLERK", "MANAGER", "HOSPITAL_CLERK", "KHTH"],
+                allowedRoles: [ROLES.ADMIN, ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.HOSPITAL_CLERK, ROLES.KHTH],
             },
         ],
     },
     {
         groupLabel: "HỆ THỐNG",
         items: [
-            { label: "Người dùng", path: "/admin/users", icon: <Users size={18} />, allowedRoles: ["ADMIN"] },
-            { label: "Phân quyền", path: "/admin/roles", icon: <ShieldCheck size={18} />, allowedRoles: ["ADMIN"] },
-            { label: "Phòng ban", path: "/admin/departments", icon: <Building2 size={18} />, allowedRoles: ["ADMIN"] },
+            { label: "Người dùng", path: "/admin/users", icon: <Users size={18} />, allowedRoles: [ROLES.ADMIN] },
+            { label: "Phân quyền", path: "/admin/roles", icon: <ShieldCheck size={18} />, allowedRoles: [ROLES.ADMIN] },
+            { label: "Phòng ban", path: "/admin/departments", icon: <Building2 size={18} />, allowedRoles: [ROLES.ADMIN] },
         ],
     },
     {
@@ -42,13 +43,13 @@ const MENU_CONFIG = [
                 label: "Kho tài liệu",
                 path: "/documents/repository",
                 icon: <FileText size={18} />,
-                allowedRoles: ["ADMIN", "HOSPITAL_CLERK", "MANAGER", "STAFF"],
+                allowedRoles: [ROLES.ADMIN, ROLES.HOSPITAL_CLERK, ROLES.HEAD_OF_DEPT, ROLES.STAFF],
             },
             {
                 label: "Upload",
                 path: "/documents/upload",
                 icon: <Upload size={18} />,
-                allowedRoles: ["ADMIN", "CLERK", "MANAGER", "STAFF"],
+                allowedRoles: [ROLES.ADMIN, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.STAFF],
             },
         ],
     },
@@ -59,26 +60,25 @@ const MENU_CONFIG = [
                 label: "Lịch cá nhân",
                 path: "/schedule/me",
                 icon: <Calendar size={18} />,
-                allowedRoles: ["ADMIN", "CLERK", "MANAGER", "HOSPITAL_CLERK", "KHTH", "STAFF"],
+                allowedRoles: [ROLES.ADMIN, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.HOSPITAL_CLERK, ROLES.KHTH, ROLES.STAFF],
             },
             {
                 label: "Upload lịch trực",
                 path: "/schedule/department",
                 icon: <Upload size={18} />,
-                allowedRoles: ["CLERK"],
+                allowedRoles: [ROLES.DEPT_CLERK],
             },
             {
                 label: "Lịch công tác tuần",
                 path: "/schedule/weekly",
                 icon: <CalendarDays size={18} />,
-                allowedRoles: ["KHTH"],
+                allowedRoles: [ROLES.KHTH ],
             },
             {
                 label: "Toàn viện",
                 path: "/schedule/master",
                 icon: <CalendarRange size={18} />,
-                allowedRoles: ["ADMIN", "CLERK", "MANAGER", "HOSPITAL_CLERK", "KHTH", "STAFF"],
-                requireHospitalScope: true,
+                allowedRoles: [ROLES.ADMIN, ROLES.KHTH],
             },
         ],
     },

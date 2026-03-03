@@ -257,3 +257,39 @@ export async function exportSchedulePdf(
     };
   }
 }
+
+/**
+ * Export consolidated duty schedule PDF of all approved departments in a week.
+ *
+ * GET /schedules/master/export/pdf?week=&year=
+ */
+export async function exportMasterDutySchedulePdf(
+  week: number,
+  year: number,
+): Promise<ApiResponse<Blob>> {
+  try {
+    const res = await apiClient.get<Blob>(
+      '/schedules/master/export/pdf',
+      {
+        params: { week, year },
+        responseType: 'blob',
+      },
+    );
+    return { success: true, data: res.data };
+  } catch (err: unknown) {
+    if (
+      err !== null &&
+      typeof err === 'object' &&
+      'response' in err &&
+      err.response !== null &&
+      typeof err.response === 'object' &&
+      'data' in err.response
+    ) {
+      return err.response.data as ApiResponse<Blob>;
+    }
+    return {
+      success: false,
+      message: err instanceof Error ? err.message : 'Export failed',
+    };
+  }
+}

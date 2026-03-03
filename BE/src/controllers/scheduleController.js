@@ -3,7 +3,30 @@ const Shift = require('../models/Shift');
 const ShiftAssignment = require('../models/ShiftAssignment');
 const Department = require('../models/Department');
 const ScheduleService = require('../services/ScheduleService');
+const SchedulePdfService = require('../services/SchedulePdfService');
 const { pool } = require('../config/database');
+
+const hasRoleCode = (user, roleCode) =>
+  (user?.roles || []).some((role) => role?.role_code === roleCode);
+
+const canViewSchedule = (user, schedule) => {
+  if (!user || !schedule) return false;
+  if (hasRoleCode(user, 'ADMIN')) return true;
+
+  const userDepartmentId = Number(user.department_id);
+  const sourceDepartmentId = Number(schedule.source_department_id);
+  const ownerDepartmentId = Number(schedule.owner_department_id);
+
+  if (userDepartmentId === sourceDepartmentId) {
+    return true;
+  }
+
+  if (userDepartmentId === ownerDepartmentId) {
+    return schedule.status === 'submitted' || schedule.status === 'approved';
+  }
+
+  return schedule.status === 'approved';
+};
 
 /**
  * @swagger
@@ -46,9 +69,10 @@ const getAllSchedules = async (req, res) => {
     };
     
     const schedules = await Schedule.findAll(filters);
+    const visibleSchedules = schedules.filter((schedule) => canViewSchedule(req.user, schedule));
 
     const schedulesWithDetails = await Promise.all(
-      schedules.map(async (schedule) => {
+      visibleSchedules.map(async (schedule) => {
         const shifts = await Shift.findBySchedule(schedule.schedule_id);
         const shiftsWithAssignments = await Promise.all(
           shifts.map(async (shift) => ({
@@ -102,6 +126,13 @@ const getScheduleById = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Không tìm thấy lịch'
+      });
+    }
+
+    if (!canViewSchedule(req.user, schedule)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền xem lịch này'
       });
     }
     
@@ -362,9 +393,12 @@ const updateSchedule = async (req, res) => {
     }
     if (
       error.message === 'Only source department can update draft schedules' ||
-      error.message === 'Only owner department can update submitted or approved schedules'
+      error.message === 'Only owner department can update approved schedules'
     ) {
       return res.status(403).json({ success: false, message: 'Bạn không có quyền chỉnh sửa lịch này' });
+    }
+    if (error.message === 'Submitted schedules cannot be updated') {
+      return res.status(400).json({ success: false, message: 'Lịch đã gửi KHTH nên không thể chỉnh sửa' });
     }
     res.status(500).json({
       success: false,
@@ -493,12 +527,23 @@ const deleteSchedule = async (req, res) => {
       });
     }
     
+    if (schedule.status === 'submitted') {
+      return res.status(400).json({
+        success: false,
+        message: 'Lịch đã gửi KHTH nên không thể xóa'
+      });
+    }
+
     // Check permission
     const userRoles = req.user.roles || [];
     const isAdmin = userRoles.some(r => r.role_code === 'ADMIN');
+    const isSourceDepartment = Number(schedule.source_department_id) === Number(req.user.department_id);
     const isKHTH = schedule.owner_department_id === req.user.department_id;
+
+    const canDeleteDraft = schedule.status === 'draft' && (isSourceDepartment || isAdmin);
+    const canDeleteApproved = schedule.status === 'approved' && (isKHTH || isAdmin);
     
-    if (!isAdmin && !isKHTH) {
+    if (!canDeleteDraft && !canDeleteApproved) {
       return res.status(403).json({
         success: false,
         message: 'Bạn không có quyền xóa lịch này'
@@ -521,6 +566,149 @@ const deleteSchedule = async (req, res) => {
   }
 };
 
+/**
+ * Export consolidated hospital duty schedule PDF by week/year.
+ * GET /schedules/master/export/pdf?week=&year=
+ */
+const exportMasterDutySchedulePdf = async (req, res) => {
+  try {
+    const week = Number(req.query.week);
+    const year = Number(req.query.year);
+
+    if (!Number.isInteger(week) || !Number.isInteger(year)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thiếu hoặc sai định dạng week/year'
+      });
+    }
+
+    const schedules = await Schedule.findAll({
+      schedule_type: 'duty',
+      week,
+      year,
+      status: 'approved'
+    });
+
+    const allShifts = [];
+    for (const schedule of schedules) {
+      const shifts = await Shift.findBySchedule(schedule.schedule_id);
+      for (const shift of shifts) {
+        shift.assignments = await ShiftAssignment.findByShift(shift.shift_id);
+      }
+      allShifts.push(...shifts);
+    }
+
+    const departmentMap = new Map();
+    for (const shift of allShifts) {
+      const departmentId = shift.department_id;
+      const dateKey = String(shift.shift_date).slice(0, 10);
+
+      if (!departmentMap.has(departmentId)) {
+        departmentMap.set(departmentId, {
+          department_id: departmentId,
+          department_name: shift.department_name ?? `Phong ${departmentId}`,
+          department_code: shift.department_code ?? '',
+          dateMap: new Map(),
+        });
+      }
+
+      const department = departmentMap.get(departmentId);
+      if (!department.dateMap.has(dateKey)) {
+        department.dateMap.set(dateKey, []);
+      }
+      department.dateMap.get(dateKey).push(shift);
+    }
+
+    const departments = [...departmentMap.values()].map((department) => ({
+      department_id: department.department_id,
+      department_name: department.department_name,
+      department_code: department.department_code,
+      dates: [...department.dateMap.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, shifts]) => ({ date, shifts })),
+    }));
+
+    const pdfBuffer = await SchedulePdfService.buildDutyPdf({
+      schedule_type: 'duty',
+      week,
+      year,
+      status: 'approved',
+      source_department_name: 'Toàn viện',
+      owner_department_name: 'KHTH',
+      departments,
+    });
+
+    const filename = `Master_Duty_Schedule_Week_${week}_${year}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+
+    return res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Export master duty schedule pdf error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi xuất PDF lịch tổng hợp toàn viện',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Export schedule as PDF
+ * GET /schedules/:id/export/pdf
+ */
+const exportSchedulePdf = async (req, res) => {
+  try {
+    const scheduleId = parseInt(req.params.id, 10);
+
+    if (Number.isNaN(scheduleId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID lịch không hợp lệ'
+      });
+    }
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch'
+      });
+    }
+
+    let pdfBuffer;
+    if (schedule.schedule_type === 'duty') {
+      pdfBuffer = await SchedulePdfService.exportDutySchedule(scheduleId);
+    } else if (schedule.schedule_type === 'weekly_work') {
+      pdfBuffer = await SchedulePdfService.exportWeeklyWorkSchedule(scheduleId);
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Loại lịch không hỗ trợ xuất PDF'
+      });
+    }
+
+    const filenamePrefix = schedule.schedule_type === 'duty'
+      ? 'Duty_Schedule'
+      : 'Weekly_Work_Schedule';
+    const filename = `${filenamePrefix}_Week_${schedule.week}_${schedule.year}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+
+    return res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Export schedule pdf error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi xuất PDF lịch',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllSchedules,
   getScheduleById,
@@ -528,5 +716,7 @@ module.exports = {
   updateSchedule,
   submitSchedule,
   approveSchedule,
-  deleteSchedule
+  deleteSchedule,
+  exportSchedulePdf,
+  exportMasterDutySchedulePdf
 };

@@ -338,14 +338,17 @@ class ScheduleService {
       throw new Error('Schedule not found');
     }
 
+    if (schedule.status === ScheduleStatus.SUBMITTED) {
+      throw new Error('Submitted schedules cannot be updated');
+    }
+
     if (schedule.status === ScheduleStatus.DRAFT) {
       if (user.department_id !== schedule.source_department_id) {
         throw new Error('Only source department can update draft schedules');
       }
-    } else {
-      // submitted or approved
+    } else if (schedule.status === ScheduleStatus.APPROVED) {
       if (user.department_id !== schedule.owner_department_id) {
-        throw new Error('Only owner department can update submitted or approved schedules');
+        throw new Error('Only owner department can update approved schedules');
       }
     }
 

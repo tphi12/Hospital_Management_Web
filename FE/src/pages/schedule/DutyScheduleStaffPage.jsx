@@ -10,7 +10,7 @@ import {
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
 import { useAuth } from "../../hooks/useAuth";
-import { getSchedulesByWeek } from "../../modules/schedule/api/scheduleApi";
+import { exportMasterDutySchedulePdf, getSchedulesByWeek } from "../../modules/schedule/api/scheduleApi";
 import { downloadSchedulePdf } from "../../modules/schedule/utils/downloadSchedulePdf";
 import { useApproveScheduleMutation } from "../../modules/schedule/hooks/useScheduleQuery";
 import { isKHTHStaff } from "../../lib/roleUtils";
@@ -53,6 +53,12 @@ const SHIFT_LABELS = {
   night:     "Ca đêm",
 };
 
+const SHIFT_TYPE_ORDER = {
+  morning: 1,
+  afternoon: 2,
+  night: 3,
+};
+
 const SHIFT_COLORS = {
   morning:   "#1677ff",
   afternoon: "#fa8c16",
@@ -80,7 +86,8 @@ export default function DutyScheduleStaffPage() {
   const [currentYear, setCurrentYear] = useState(() => dayjs().year());
 
   // ── Data ─────────────────────────────────────────────────────────────────
-  const [schedule,    setSchedule]    = useState(null);
+  const [schedules,   setSchedules]   = useState([]);
+  const [reviewScheduleId, setReviewScheduleId] = useState(null);
   const [loading,     setLoading]     = useState(false);
   const [exporting,   setExporting]   = useState(false);
 
@@ -97,22 +104,28 @@ export default function DutyScheduleStaffPage() {
       const res = await getSchedulesByWeek(currentWeek, currentYear, "duty");
       if (res.success) {
         const list = res.data ?? [];
-        // KHTH sees submitted+approved (prioritize submitted for review).
-        // Other users only see approved schedules.
         const visible = canReviewAsKHTH
           ? list.filter((s) => s.status === "submitted" || s.status === "approved")
           : list.filter((s) => s.status === "approved");
 
-        const submitted = visible.find((s) => s.status === "submitted") ?? null;
-        const found = canReviewAsKHTH
-          ? (submitted ?? visible[0] ?? null)
-          : (visible.find((s) => s.source_department_id === user?.departmentId) ?? visible[0] ?? null);
-        setSchedule(found);
+        setSchedules(visible);
+
+        if (canReviewAsKHTH) {
+          const submittedSchedules = visible.filter((s) => s.status === "submitted");
+          setReviewScheduleId((prev) => {
+            if (prev && submittedSchedules.some((s) => s.schedule_id === prev)) return prev;
+            return submittedSchedules[0]?.schedule_id ?? null;
+          });
+        } else {
+          setReviewScheduleId(null);
+        }
       } else {
-        setSchedule(null);
+        setSchedules([]);
+        setReviewScheduleId(null);
       }
     } catch {
-      setSchedule(null);
+      setSchedules([]);
+      setReviewScheduleId(null);
     } finally {
       setLoading(false);
     }
@@ -140,16 +153,65 @@ export default function DutyScheduleStaffPage() {
     }
   };
 
+  const submittedSchedules = canReviewAsKHTH
+    ? schedules.filter((s) => s.status === "submitted")
+    : [];
+
+  const approvedSchedules = schedules.filter((s) => s.status === "approved");
+
+  const reviewSchedule = canReviewAsKHTH
+    ? submittedSchedules.find((s) => s.schedule_id === reviewScheduleId) ?? submittedSchedules[0] ?? null
+    : null;
+
+  const mergedApprovedSchedule = approvedSchedules.length > 0
+    ? {
+        schedule_id: `master-${currentWeek}-${currentYear}`,
+        week: currentWeek,
+        year: currentYear,
+        status: "approved",
+        owner_department_name: "KHTH",
+        source_department_name: "Toàn viện",
+        is_master: true,
+        shifts: approvedSchedules.flatMap((s) => s.shifts ?? []),
+      }
+    : null;
+
+  const schedule = reviewSchedule ?? mergedApprovedSchedule;
+
   // ─── Export PDF ────────────────────────────────────────────────────────
 
   const handleExportPdf = async () => {
     if (!schedule) return;
     setExporting(true);
     try {
-      const result = await downloadSchedulePdf(schedule);
+      let result;
+
+      if (schedule.is_master) {
+        const res = await exportMasterDutySchedulePdf(currentWeek, currentYear);
+        if (res.success && res.data) {
+          const filename = `Master_Duty_Schedule_Week_${currentWeek}_${currentYear}.pdf`;
+          const url = URL.createObjectURL(res.data);
+          const anchor = document.createElement("a");
+          anchor.href = url;
+          anchor.download = filename;
+          anchor.style.display = "none";
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 10_000);
+          result = { success: true, message: filename };
+        } else {
+          result = { success: false, message: res.message ?? "Xuất PDF thất bại" };
+        }
+      } else {
+        result = await downloadSchedulePdf(schedule);
+      }
+
       if (result.success) {
         message.success(
-          `Đã tải xuống Duty_Schedule_Week_${schedule.week}_${schedule.year}.pdf`
+          schedule.is_master
+            ? `Đã tải xuống Master_Duty_Schedule_Week_${currentWeek}_${currentYear}.pdf`
+            : `Đã tải xuống Duty_Schedule_Week_${schedule.week}_${schedule.year}.pdf`
         );
       } else {
         message.error(result.message ?? "Xuất PDF thất bại");
@@ -160,9 +222,9 @@ export default function DutyScheduleStaffPage() {
   };
 
   const handleApproveSchedule = async () => {
-    if (!schedule?.schedule_id) return;
+    if (!reviewSchedule?.schedule_id) return;
     try {
-      await approveMutation.mutateAsync(schedule.schedule_id);
+      await approveMutation.mutateAsync(reviewSchedule.schedule_id);
       fetchSchedule();
     } catch {
       // toast is shown in mutation hook
@@ -216,7 +278,7 @@ export default function DutyScheduleStaffPage() {
         </Title>
 
         <Space wrap>
-          {departments.length > 0 && (
+          {!schedule?.is_master && departments.length > 0 && (
             <Select
               value={deptFilter}
               onChange={setDeptFilter}
@@ -244,15 +306,30 @@ export default function DutyScheduleStaffPage() {
             </Button>
           </Tooltip>
 
-          {canReviewAsKHTH && schedule?.status === "submitted" && (
-            <Button
-              type="primary"
-              icon={<CheckCircleOutlined />}
-              loading={approveMutation.isPending}
-              onClick={handleApproveSchedule}
-            >
-              Duyệt lịch
-            </Button>
+          {canReviewAsKHTH && submittedSchedules.length > 0 && (
+            <>
+              <Select
+                value={reviewSchedule?.schedule_id}
+                onChange={setReviewScheduleId}
+                size="small"
+                style={{ minWidth: 240 }}
+              >
+                {submittedSchedules.map((s) => (
+                  <Option key={s.schedule_id} value={s.schedule_id}>
+                    {`${s.source_department_name ?? `Phòng ${s.source_department_id}`} · Tuần ${s.week}/${s.year}`}
+                  </Option>
+                ))}
+              </Select>
+
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                loading={approveMutation.isPending}
+                onClick={handleApproveSchedule}
+              >
+                Duyệt lịch đã chọn
+              </Button>
+            </>
           )}
         </Space>
       </div>
@@ -279,12 +356,14 @@ export default function DutyScheduleStaffPage() {
           {schedule && (
             <Tag
               icon={<CheckCircleOutlined />}
-              color={schedule.status === "submitted" ? "processing" : "success"}
+              color={schedule.is_master ? "success" : (schedule.status === "submitted" ? "processing" : "success")}
               style={{ marginLeft: "auto" }}
             >
-              {schedule.status === "submitted" ? "Đã gửi KHTH" : "Đã duyệt"}
+              {schedule.is_master
+                ? "Lịch tổng hợp toàn viện"
+                : (schedule.status === "submitted" ? "Đã gửi KHTH" : "Đã duyệt")}
               {" · "}
-              {schedule.owner_department_name ?? "KHTH"}
+              {schedule.source_department_name ?? schedule.owner_department_name ?? "KHTH"}
             </Tag>
           )}
         </div>
@@ -307,6 +386,11 @@ export default function DutyScheduleStaffPage() {
             }
           />
         </Card>
+      ) : schedule.is_master ? (
+        <MasterMergedScheduleTable
+          schedule={schedule}
+          days={days}
+        />
       ) : (
         <Row gutter={[8, 8]}>
           {days.map((day, idx) => {
@@ -381,6 +465,146 @@ export default function DutyScheduleStaffPage() {
         </Row>
       )}
     </div>
+  );
+}
+
+function MasterMergedScheduleTable({ schedule, days }) {
+  const departments = Array.from(
+    new Map(
+      (schedule?.shifts ?? []).map((shift) => [
+        shift.department_id,
+        {
+          id: shift.department_id,
+          name: shift.department_name ?? `Phòng ${shift.department_id}`,
+          code: shift.department_code ?? "",
+        },
+      ]),
+    ).values(),
+  ).sort((a, b) => {
+    const left = `${a.code} ${a.name}`.trim().toUpperCase();
+    const right = `${b.code} ${b.name}`.trim().toUpperCase();
+    return left.localeCompare(right);
+  });
+
+  const shiftsByDayAndDept = new Map();
+  for (const shift of schedule?.shifts ?? []) {
+    const date = normaliseDate(shift.shift_date);
+    const key = `${date}::${shift.department_id}`;
+    if (!shiftsByDayAndDept.has(key)) {
+      shiftsByDayAndDept.set(key, []);
+    }
+    shiftsByDayAndDept.get(key).push(shift);
+  }
+
+  for (const list of shiftsByDayAndDept.values()) {
+    list.sort((left, right) => {
+      const timeCompare = String(left.start_time ?? "").localeCompare(String(right.start_time ?? ""));
+      if (timeCompare !== 0) return timeCompare;
+      return (SHIFT_TYPE_ORDER[left.shift_type] ?? 99) - (SHIFT_TYPE_ORDER[right.shift_type] ?? 99);
+    });
+  }
+
+  if (departments.length === 0) {
+    return (
+      <Card>
+        <Empty description="Chưa có dữ liệu lịch tổng hợp toàn viện" />
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse" style={{ minWidth: Math.max(900, departments.length * 220) }}>
+          <thead>
+            <tr>
+              <th className="border border-slate-200 bg-slate-50 p-2 text-left text-xs font-semibold sticky left-0 z-10">
+                Thứ / Ngày
+              </th>
+              {departments.map((department) => (
+                <th
+                  key={department.id}
+                  className="border border-slate-200 bg-slate-50 p-2 text-left text-xs font-semibold"
+                >
+                  {department.name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {days.map((day, idx) => {
+              const date = day.format("YYYY-MM-DD");
+              const isToday = day.isSame(dayjs(), "day");
+              return (
+                <tr key={date}>
+                  <td className="border border-slate-200 p-2 align-top bg-white sticky left-0 z-10">
+                    <div className="text-xs font-semibold" style={{ color: isToday ? "#1677ff" : undefined }}>
+                      {DAY_NAMES[idx]}
+                    </div>
+                    <div className="text-xs text-slate-500">{day.format("DD/MM")}</div>
+                  </td>
+
+                  {departments.map((department) => {
+                    const key = `${date}::${department.id}`;
+                    const shifts = shiftsByDayAndDept.get(key) ?? [];
+
+                    return (
+                      <td key={key} className="border border-slate-200 p-2 align-top" style={{ minWidth: 220 }}>
+                        {shifts.length === 0 ? (
+                          <Text type="secondary" style={{ fontSize: 11 }}>—</Text>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            {shifts.map((shift) => (
+                              <div
+                                key={shift.shift_id}
+                                style={{
+                                  borderLeft: `3px solid ${SHIFT_COLORS[shift.shift_type] ?? "#666"}`,
+                                  borderRadius: 5,
+                                  padding: "4px 6px",
+                                  background: SHIFT_BG[shift.shift_type] ?? "#fafafa",
+                                }}
+                              >
+                                <div className="flex items-center justify-between gap-1">
+                                  <Text strong style={{ fontSize: 10, color: SHIFT_COLORS[shift.shift_type] ?? "#666" }}>
+                                    {SHIFT_LABELS[shift.shift_type] ?? shift.shift_type}
+                                  </Text>
+                                  <Text style={{ fontSize: 10, color: "#666" }}>
+                                    {fmtTime(shift.start_time)} – {fmtTime(shift.end_time)}
+                                  </Text>
+                                </div>
+
+                                <div style={{ fontSize: 10, color: "#888", marginTop: 1 }}>
+                                  <TeamOutlined style={{ marginRight: 2 }} />
+                                  {(shift.assignments ?? []).length}/{shift.max_staff} người
+                                </div>
+
+                                {(shift.assignments ?? []).length > 0 && (
+                                  <>
+                                    <Divider dashed style={{ margin: "3px 0" }} />
+                                    <div className="flex flex-col gap-0.5">
+                                      {(shift.assignments ?? []).map((assignment) => (
+                                        <Text key={assignment.assignment_id} style={{ fontSize: 10 }} ellipsis>
+                                          {assignment.full_name ?? `#${assignment.user_id}`}
+                                        </Text>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 

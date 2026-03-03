@@ -1,3 +1,5 @@
+import { ROLES } from './roles';
+
 type RoleEntry = {
   role_code?: string;
   scope_type?: string;
@@ -52,13 +54,13 @@ export function isHospitalScope(user: AuthUser | null | undefined): boolean {
 }
 
 /**
- * Business rule: "KHTH" is NOT a real DB role.
+ * Business rule: "KHTH".
  * A user is treated as KHTH when they have STAFF role and belong to KHTH department.
  */
 export function isKHTHStaff(user: AuthUser | null | undefined): boolean {
   if (!user) return false;
 
-  const hasStaffRole = hasRole(user, 'STAFF');
+  const hasStaffRole = hasRole(user, ROLES.STAFF);
   if (!hasStaffRole) return false;
 
   const userDeptCode = String(user.departmentCode ?? '').toUpperCase();
@@ -86,9 +88,9 @@ export function getEffectiveRoleCodes(user: AuthUser | null | undefined): Set<st
   });
   if (user.role) codes.add(user.role);
 
-  if (codes.has('CLERK')) codes.add('DEPT_CLERK');
-  if (codes.has('MANAGER')) codes.add('HEAD_OF_DEPT');
-  if (isKHTHStaff(user)) codes.add('KHTH');
+  if (codes.has('CLERK')) codes.add(ROLES.DEPT_CLERK);
+  if (codes.has('MANAGER')) codes.add(ROLES.HEAD_OF_DEPT);
+  if (isKHTHStaff(user)) codes.add(ROLES.KHTH);
 
   return codes;
 }

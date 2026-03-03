@@ -600,7 +600,7 @@ describe('ScheduleService', () => {
       expect(Schedule.update).not.toHaveBeenCalled();
     });
 
-    it('owner_department can update a submitted schedule', async () => {
+    it('submitted schedule cannot be updated (even by owner_department)', async () => {
       // Arrange — user is in KHTH (department_id=2), schedule is submitted
       const user = { user_id: 10, department_id: 2 };
       const mockSchedule = {
@@ -610,17 +610,16 @@ describe('ScheduleService', () => {
         owner_department_id: 2
       };
       Schedule.findById.mockResolvedValue(mockSchedule);
-      Schedule.update.mockResolvedValue(true);
 
-      // Act
-      const result = await ScheduleService.updateSchedule(100, user, updateData);
+      // Act & Assert
+      await expect(ScheduleService.updateSchedule(100, user, updateData))
+        .rejects
+        .toThrow('Submitted schedules cannot be updated');
 
-      // Assert
-      expect(result).toBe(true);
-      expect(Schedule.update).toHaveBeenCalledWith(100, updateData);
+      expect(Schedule.update).not.toHaveBeenCalled();
     });
 
-    it('wrong department cannot update a submitted schedule', async () => {
+    it('wrong department cannot update a submitted schedule (same submitted lock)', async () => {
       // Arrange — source department 3 tries to update after submission
       const user = { user_id: 5, department_id: 3 };
       const mockSchedule = {
@@ -634,7 +633,7 @@ describe('ScheduleService', () => {
       // Act & Assert
       await expect(ScheduleService.updateSchedule(100, user, updateData))
         .rejects
-        .toThrow('Only owner department can update submitted or approved schedules');
+        .toThrow('Submitted schedules cannot be updated');
 
       expect(Schedule.update).not.toHaveBeenCalled();
     });

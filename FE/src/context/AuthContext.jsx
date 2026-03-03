@@ -74,7 +74,7 @@ export const AuthProvider = ({ children }) => {
 
             const normalized = normalizeUser(apiUser);
             const hasClerkRole = (normalized?.roles || []).some(
-                (role) => role?.role_code === "CLERK"
+                (role) => role?.role_code === ROLES.DEPT_CLERK || role?.role_code === "CLERK"
             );
 
             // Save to localStorage

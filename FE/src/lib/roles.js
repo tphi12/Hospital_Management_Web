@@ -7,7 +7,7 @@ export const ROLES = {
   HEAD_OF_DEPT: "HEAD_OF_DEPT",       // Trưởng Phòng
   DEPT_CLERK: "DEPT_CLERK",           // Văn Thư Phòng Ban
   STAFF: "STAFF",                     // Nhân Viên
-  KHTH: "KHTH",                       // Role ảo FE: STAFF thuộc phòng KHTH (không phải role DB)
+  KHTH: "KHTH",                       // STAFF thuộc phòng KHTH 
 };
 
 /**
@@ -40,7 +40,7 @@ export const ROLE_DETAILS = {
     color: "bg-green-100 text-green-700",
   },
   [ROLES.KHTH]: {
-    label: "KHTH (suy ra từ phòng ban)",
+    label: "KHTH",
     description: "Người dùng STAFF thuộc phòng KHTH, có quyền nghiệp vụ KHTH.",
     color: "bg-cyan-100 text-cyan-700",
   },

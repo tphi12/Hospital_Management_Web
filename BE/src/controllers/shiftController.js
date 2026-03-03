@@ -2,6 +2,18 @@ const Shift = require('../models/Shift');
 const Schedule = require('../models/Schedule');
 const ShiftAssignment = require('../models/ShiftAssignment');
 
+const canMutateShiftSchedule = (schedule, user) => {
+  if (!schedule || !user) return false;
+
+  const isAdmin = (user.roles || []).some((role) => role.role_code === 'ADMIN');
+  if (isAdmin) return true;
+
+  return (
+    schedule.status === 'draft' &&
+    Number(schedule.source_department_id) === Number(user.department_id)
+  );
+};
+
 /**
  * @swagger
  * /shifts/{id}:
@@ -124,6 +136,13 @@ const createShift = async (req, res) => {
       });
     }
 
+    if (!canMutateShiftSchedule(schedule, req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Lịch đã gửi duyệt/đã duyệt nên không thể chỉnh sửa ca trực'
+      });
+    }
+
     const resolvedDepartmentId =
       req.user?.department_id ??
       req.user?.departmentId ??
@@ -228,6 +247,21 @@ const updateShift = async (req, res) => {
         message: 'Không tìm thấy ca trực'
       });
     }
+
+    const schedule = await Schedule.findById(shift.schedule_id);
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch của ca trực'
+      });
+    }
+
+    if (!canMutateShiftSchedule(schedule, req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Lịch đã gửi duyệt/đã duyệt nên không thể cập nhật ca trực'
+      });
+    }
     
     await Shift.update(shiftId, req.body);
     
@@ -270,6 +304,21 @@ const deleteShift = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Không tìm thấy ca trực'
+      });
+    }
+
+    const schedule = await Schedule.findById(shift.schedule_id);
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch của ca trực'
+      });
+    }
+
+    if (!canMutateShiftSchedule(schedule, req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Lịch đã gửi duyệt/đã duyệt nên không thể xóa ca trực'
       });
     }
     
@@ -337,6 +386,21 @@ const assignStaff = async (req, res) => {
         message: 'Không tìm thấy ca trực'
       });
     }
+
+    const schedule = await Schedule.findById(shift.schedule_id);
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch của ca trực'
+      });
+    }
+
+    if (!canMutateShiftSchedule(schedule, req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Lịch đã gửi duyệt/đã duyệt nên không thể phân công nhân viên'
+      });
+    }
     
     // Check max_staff limit
     if (shift.max_staff && shift.assigned_count >= shift.max_staff) {
@@ -395,6 +459,37 @@ const assignStaff = async (req, res) => {
 const removeAssignment = async (req, res) => {
   try {
     const assignmentId = req.params.id;
+
+    const assignment = await ShiftAssignment.findById(assignmentId);
+    if (!assignment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy phân công'
+      });
+    }
+
+    const shift = await Shift.findById(assignment.shift_id);
+    if (!shift) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy ca trực'
+      });
+    }
+
+    const schedule = await Schedule.findById(shift.schedule_id);
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch của ca trực'
+      });
+    }
+
+    if (!canMutateShiftSchedule(schedule, req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Lịch đã gửi duyệt/đã duyệt nên không thể xóa phân công'
+      });
+    }
     
     await ShiftAssignment.delete(assignmentId);
     

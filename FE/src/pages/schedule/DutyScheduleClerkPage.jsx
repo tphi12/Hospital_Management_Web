@@ -113,10 +113,10 @@ export default function DutyScheduleClerkPage() {
       const res = await getSchedulesByWeek(currentWeek, currentYear, "duty");
       if (res.success) {
         const list = res.data ?? [];
-        // Pick the schedule owned by the current user's department, or any
+        // Pick only the schedule owned by the current user's department
         const found = list.find(
           (s) => s.source_department_id === user?.departmentId
-        ) ?? list[0] ?? null;
+        ) ?? null;
         setSchedule(found);
       } else {
         message.error(res.message ?? "Không thể tải lịch trực");
