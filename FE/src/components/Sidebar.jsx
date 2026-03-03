@@ -10,7 +10,8 @@ import {
     CalendarDays,
     CalendarRange,
     LogOut,
-    User
+    User,
+    FileCheck
 } from "lucide-react";
 import { Menu, Button, Avatar, Divider } from "antd";
 import hospitalLogoLarge from "../assets/hospital-logo-large.png";
@@ -42,6 +43,7 @@ const Sidebar = () => {
             type: 'group', label: 'TÀI LIỆU', children: [
                 { key: '/documents/repository', icon: <FileText size={18} />, label: 'Kho tài liệu', roles: [ROLES.HOSPITAL_CLERK, ROLES.ADMIN, ROLES.HEAD_OF_DEPT, ROLES.STAFF] },
                 { key: '/documents/upload', icon: <Upload size={18} />, label: 'Upload', roles: [ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.ADMIN] },
+                { key: '/documents/approvals', icon: <FileCheck size={18} />, label: 'Duyệt tài liệu', roles: [ROLES.ADMIN, ROLES.HEAD_OF_DEPT] },
             ]
         },
         {

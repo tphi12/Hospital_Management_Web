@@ -192,7 +192,7 @@ const InfoItem = ({ icon, label, value }) => {
             if (React.isValidElement(value)) return value;
             if (typeof value === 'object') return JSON.stringify(value);
             return String(value);
-        } catch (e) {
+        } catch {
             return "Error";
         }
     };

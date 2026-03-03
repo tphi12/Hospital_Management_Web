@@ -12,12 +12,18 @@ import { departmentService, userService } from "../../services";
 
 const DepartmentManagement = () => {
     const [departments, setDepartments] = useState([]);
-    const [users, setUsers] = useState([]);
+    const [_users, _setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchText, setSearchText] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingDept, setEditingDept] = useState(null);
     const [form] = Form.useForm();
+
+    // States for viewing members
+    const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
+    const [departmentMembers, setDepartmentMembers] = useState([]);
+    const [selectedDepartmentName, setSelectedDepartmentName] = useState("");
+    const [membersLoading, setMembersLoading] = useState(false);
 
     useEffect(() => {
         fetchDepartments();
@@ -63,7 +69,7 @@ const DepartmentManagement = () => {
                     email: u.email,
                 }))
                 : [];
-            setUsers(mapped);
+            _setUsers(mapped);
         } catch (error) {
             console.error("Failed to fetch users:", error);
         }
@@ -139,6 +145,25 @@ const DepartmentManagement = () => {
         }
     };
 
+    const handleViewMembers = async (department) => {
+        setSelectedDepartmentName(department.name);
+        setIsMembersModalOpen(true);
+        setMembersLoading(true);
+        try {
+            const result = await departmentService.getDepartmentMembers(department.id);
+            // Result is expected to be { success: true, data: [...] } or just [...] depending on service/backend wrapper
+            // Based on departmentService.js: return response.data
+            // Based on departmentController.js: res.json({ success: true, data: members })
+            const members = result.data || result;
+            setDepartmentMembers(Array.isArray(members) ? members : []);
+        } catch (error) {
+            message.error("Không thể tải danh sách thành viên");
+            console.error(error);
+        } finally {
+            setMembersLoading(false);
+        }
+    };
+
     const columns = [
         {
             title: 'Tên Phòng Ban',
@@ -159,7 +184,7 @@ const DepartmentManagement = () => {
             ),
         },
         {
-            title: 'Trưởng Phòng',
+            title: 'Trưởng Bộ Phận',
             dataIndex: 'head',
             key: 'head',
             render: (head) => head ? (
@@ -190,7 +215,11 @@ const DepartmentManagement = () => {
                         <Button type="text" icon={<EditOutlined className="text-blue-600" />} onClick={() => handleEdit(record)} />
                     </Tooltip>
                     <Tooltip title="Xem thành viên">
-                        <Button type="text" icon={<TeamOutlined className="text-green-600" />} />
+                        <Button
+                            type="text"
+                            icon={<TeamOutlined className="text-green-600" />}
+                            onClick={() => handleViewMembers(record)}
+                        />
                     </Tooltip>
                     <Tooltip title="Xóa">
                         <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} />
@@ -283,21 +312,66 @@ const DepartmentManagement = () => {
                             ))}
                         </Select>
                     </Form.Item>
-
-                    <Form.Item
-                        name="head_id"
-                        label="Trưởng phòng"
-                        tooltip="Chọn người quản lý phòng ban"
-                    >
-                        <Select placeholder="Chọn quản lý" allowClear showSearch filterOption={(input, option) =>
-                            option.children.toLowerCase().includes(input.toLowerCase())
-                        }>
-                            {users.map(u => (
-                                <Select.Option key={u.id} value={u.id}>{u.name} ({u.email})</Select.Option>
-                            ))}
-                        </Select>
-                    </Form.Item>
                 </Form>
+            </Modal>
+
+            {/* View Members Modal */}
+            <Modal
+                title={`Danh sách thành viên - ${selectedDepartmentName}`}
+                open={isMembersModalOpen}
+                onCancel={() => setIsMembersModalOpen(false)}
+                footer={[
+                    <Button key="close" onClick={() => setIsMembersModalOpen(false)}>
+                        Đóng
+                    </Button>
+                ]}
+                width={800}
+            >
+                <Table
+                    dataSource={departmentMembers}
+                    loading={membersLoading}
+                    rowKey="user_id"
+                    pagination={{ pageSize: 5 }}
+                    columns={[
+                        {
+                            title: 'Họ và tên',
+                            dataIndex: 'full_name',
+                            key: 'full_name',
+                            render: (text) => <span className="font-medium">{text}</span>
+                        },
+                        {
+                            title: 'Email',
+                            dataIndex: 'email',
+                            key: 'email',
+                        },
+                        {
+                            title: 'Số điện thoại',
+                            dataIndex: 'phone',
+                            key: 'phone',
+                            render: (text) => text || <span className="text-slate-400 italic">Chưa cập nhật</span>
+                        },
+                        {
+                            title: 'Vai trò',
+                            dataIndex: 'role_name',
+                            key: 'role_name',
+                            render: (text) => (
+                                <Tag color={text === 'Manager' ? 'blue' : 'default'}>
+                                    {text || 'Nhân viên'}
+                                </Tag>
+                            )
+                        },
+                        {
+                            title: 'Trạng thái',
+                            dataIndex: 'status',
+                            key: 'status',
+                            render: (status) => (
+                                <Tag color={status === 'active' ? 'success' : 'error'}>
+                                    {status === 'active' ? 'Hoạt động' : 'Vô hiệu hóa'}
+                                </Tag>
+                            )
+                        }
+                    ]}
+                />
             </Modal>
         </div>
     );

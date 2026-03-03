@@ -43,6 +43,11 @@ const UserManagement = () => {
     const [editingUser, setEditingUser] = useState(null);
     const [form] = Form.useForm();
 
+    // Filter states
+    const [selectedRole, setSelectedRole] = useState(null);
+    const [selectedDepartment, setSelectedDepartment] = useState(null);
+    const [selectedStatus, setSelectedStatus] = useState(null);
+
     // Fetch initial data
     useEffect(() => {
         fetchUsers();
@@ -66,8 +71,10 @@ const UserManagement = () => {
                         name: u.department_name || 'Chưa có',
                         code: u.department_code,
                     },
-                    role: u.role || (u.role_name || u.role_code || u.roles
-                        ? { name: u.role_name || u.role_code || u.roles }
+                    // Ensure role structure is consistent
+                    role_id: u.role_id || u.role?.id || u.role?.role_id,
+                    role: u.role || (u.role_name || u.role_code
+                        ? { id: u.role_id, name: u.role_name || u.role_code }
                         : null),
                 }))
                 : [];
@@ -115,10 +122,18 @@ const UserManagement = () => {
 
     const handleSearch = (e) => setSearchText(e.target.value.toLowerCase());
 
+    console.log("First user role data:", users[0]?.role_id, users[0]?.role); // DEBUG: Check specific role fields
     const filteredUsers = users.filter(user => {
         const name = (user?.name || '').toLowerCase();
         const email = (user?.email || '').toLowerCase();
-        return name.includes(searchText) || email.includes(searchText);
+        const matchesSearch = name.includes(searchText) || email.includes(searchText);
+
+        // Debugging logs removed
+        const matchesRole = selectedRole ? (user.role_id === selectedRole || user.role?.id === selectedRole) : true;
+        const matchesDepartment = selectedDepartment ? (user.department_id === selectedDepartment) : true;
+        const matchesStatus = selectedStatus ? (user.status === selectedStatus) : true;
+
+        return matchesSearch && matchesRole && matchesDepartment && matchesStatus;
     });
 
     const handleDelete = async (id) => {
@@ -225,10 +240,10 @@ const UserManagement = () => {
             key: 'name',
             render: (text, record) => (
                 <Space>
-                    <Avatar 
-                        src={record.avatar} 
-                        shape="square" 
-                        size="large" 
+                    <Avatar
+                        src={record.avatar}
+                        shape="square"
+                        size="large"
                         icon={<UserOutlined />}
                         style={{ backgroundColor: '#1890ff' }}
                     >
@@ -318,16 +333,65 @@ const UserManagement = () => {
             </div>
 
             <Card variant="borderless" className="shadow-sm">
-                <div className="mb-4 flex justify-between">
-                    <Input
-                        prefix={<SearchOutlined className="text-slate-400" />}
-                        placeholder="Tìm kiếm theo tên, email..."
-                        className="w-full max-w-md"
-                        value={searchText}
-                        onChange={handleSearch}
-                        allowClear
-                        size="large"
-                    />
+                <div className="mb-4">
+                    <Row gutter={[16, 16]} align="middle">
+                        <Col xs={24} md={8} lg={6}>
+                            <Input
+                                prefix={<SearchOutlined className="text-slate-400" />}
+                                placeholder="Tìm kiếm theo tên, email..."
+                                value={searchText}
+                                onChange={handleSearch}
+                                allowClear
+                                className="w-full"
+                            />
+                        </Col>
+                        <Col xs={24} md={5} lg={5}>
+                            <Select
+                                placeholder="Lọc theo phòng ban"
+                                allowClear
+                                className="w-full"
+                                onChange={setSelectedDepartment}
+                                value={selectedDepartment}
+                                options={departments.map(d => ({ label: d.name, value: d.id }))}
+                            />
+                        </Col>
+                        <Col xs={24} md={5} lg={5}>
+                            <Select
+                                placeholder="Lọc theo vai trò"
+                                allowClear
+                                className="w-full"
+                                onChange={setSelectedRole}
+                                value={selectedRole}
+                                options={roles.map(r => ({ label: r.name, value: r.id }))}
+                            />
+                        </Col>
+                        <Col xs={24} md={4} lg={4}>
+                            <Select
+                                placeholder="Trạng thái"
+                                allowClear
+                                className="w-full"
+                                onChange={setSelectedStatus}
+                                value={selectedStatus}
+                                options={[
+                                    { label: 'Hoạt động', value: 'active' },
+                                    { label: 'Vô hiệu hóa', value: 'inactive' },
+                                ]}
+                            />
+                        </Col>
+                        <Col xs={24} md={2} lg={4}>
+                            <Button
+                                onClick={() => {
+                                    setSearchText("");
+                                    setSelectedDepartment(null);
+                                    setSelectedRole(null);
+                                    setSelectedStatus(null);
+                                }}
+                                disabled={!searchText && !selectedDepartment && !selectedRole && !selectedStatus}
+                            >
+                                Xóa lọc
+                            </Button>
+                        </Col>
+                    </Row>
                 </div>
                 <Spin spinning={loading}>
                     <Table
@@ -393,8 +457,8 @@ const UserManagement = () => {
                             </Form.Item>
                         </Col>
                         <Col span={12}>
-                            <Form.Item 
-                                name="department_id" 
+                            <Form.Item
+                                name="department_id"
                                 label="Phòng ban"
                                 rules={[{ required: true, message: 'Vui lòng chọn phòng ban' }]}
                             >
@@ -441,8 +505,8 @@ const UserManagement = () => {
                         </Row>
                     )}
 
-                    <Form.Item 
-                        name="role_id" 
+                    <Form.Item
+                        name="role_id"
                         label="Vai trò hệ thống"
                         rules={[{ required: true, message: 'Vui lòng chọn vai trò' }]}
                     >

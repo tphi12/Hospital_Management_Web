@@ -7,16 +7,14 @@ import {
     LogoutOutlined,
     CalendarOutlined
 } from "@ant-design/icons";
-import { Layout, Button, Badge, Dropdown, Avatar, Breadcrumb, Space, theme } from "antd";
+import { Layout, Button, Badge, Dropdown, Avatar, Breadcrumb, Space } from "antd";
 
 const { Header } = Layout;
 
 const Navbar = () => {
     const { user, logout } = useAuth();
     const location = useLocation();
-    const {
-        token: { colorBgContainer },
-    } = theme.useToken();
+    // Removed unused theme variables
 
     // Generate Breadcrumb items based on path
     const getBreadcrumbItems = () => {
