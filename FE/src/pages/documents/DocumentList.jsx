@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     SearchOutlined,
     EyeOutlined,
@@ -25,7 +25,6 @@ import {
     Card,
     Breadcrumb,
     Typography,
-    message,
     Form,
     Row,
     Col,
@@ -51,15 +50,10 @@ const DocumentList = () => {
     const [form] = Form.useForm();
 
     // Fetch documents and categories on component mount
-    useEffect(() => {
-        fetchDocuments();
-        fetchCategories();
-    }, []);
-
-    const fetchDocuments = async () => {
+    const fetchDocuments = useCallback(async (searchTerm = "") => {
         setLoading(true);
         try {
-            const response = await documentService.getAllDocuments({ search: searchText });
+            const response = await documentService.getAllDocuments({ search: searchTerm });
             setDocuments(response.data || []);
         } catch (error) {
             console.error('Fetch documents error:', error);
@@ -68,9 +62,9 @@ const DocumentList = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [messageApi]);
 
-    const fetchCategories = async () => {
+    const fetchCategories = useCallback(async () => {
         try {
             const response = await categoryService.getAllCategories();
             setCategories(response.data || []);
@@ -78,7 +72,12 @@ const DocumentList = () => {
             console.error('Fetch categories error:', error);
             setCategories([]);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        fetchDocuments();
+        fetchCategories();
+    }, [fetchDocuments, fetchCategories]);
 
     const handleView = (doc) => {
         setCurrentDoc(doc);
@@ -101,7 +100,7 @@ const DocumentList = () => {
             await documentService.updateDocument(currentDoc.document_id, formData);
             messageApi.success("Cập nhật tài liệu thành công!");
             setIsEditModalOpen(false);
-            fetchDocuments();
+            fetchDocuments(searchText);
         } catch (error) {
             console.error('Update error:', error);
             messageApi.error('Lỗi cập nhật tài liệu');
@@ -112,7 +111,7 @@ const DocumentList = () => {
         try {
             await documentService.deleteDocument(id);
             messageApi.success('Xóa tài liệu thành công');
-            fetchDocuments();
+            fetchDocuments(searchText);
         } catch (error) {
             console.error('Delete error:', error);
             messageApi.error(error.response?.data?.message || 'Lỗi xóa tài liệu');
@@ -187,7 +186,7 @@ const DocumentList = () => {
     };
 
     const handleSearch = () => {
-        fetchDocuments();
+        fetchDocuments(searchText);
     };
 
     const getFileIcon = (path) => {
@@ -214,7 +213,7 @@ const DocumentList = () => {
             const date = new Date(dateString);
             if (isNaN(date.getTime())) return '-';
             return date.toLocaleDateString('vi-VN');
-        } catch (error) {
+        } catch {
             return '-';
         }
     };

@@ -129,7 +129,7 @@ export default function DutyScheduleStaffPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentWeek, currentYear, user?.departmentId, canReviewAsKHTH]);
+  }, [currentWeek, currentYear, canReviewAsKHTH]);
 
   useEffect(() => { fetchSchedule(); }, [fetchSchedule]);
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     InboxOutlined,
@@ -14,7 +14,6 @@ import {
     Button,
     Card,
     Typography,
-    message,
     Alert,
     Breadcrumb,
     Row,
@@ -36,11 +35,7 @@ const DocumentUpload = () => {
     const navigate = useNavigate();
 
     // Fetch categories on component mount
-    useEffect(() => {
-        fetchCategories();
-    }, []);
-
-    const fetchCategories = async () => {
+    const fetchCategories = useCallback(async () => {
         try {
             const response = await categoryService.getAllCategories();
             setCategories(response.data || []);
@@ -49,7 +44,11 @@ const DocumentUpload = () => {
             messageApi.error('Lỗi tải danh mục');
             setCategories([]);
         }
-    };
+    }, [messageApi]);
+
+    useEffect(() => {
+        fetchCategories();
+    }, [fetchCategories]);
 
     const handleUpload = async (values) => {
         if (fileList.length === 0) {
@@ -68,7 +67,7 @@ const DocumentUpload = () => {
             }
             formData.append('file', fileList[0]);
 
-            const response = await documentService.uploadDocument(formData);
+            await documentService.uploadDocument(formData);
             
             messageApi.success("Upload tài liệu thành công!");
             form.resetFields();
