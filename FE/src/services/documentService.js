@@ -47,6 +47,7 @@ export const documentService = {
 
   // Approve document (Manager only)
   approveDocument: async (id) => {
+    console.log('id:', id);
     const response = await api.patch(`/documents/${id}/approve`);
     return response.data;
   },

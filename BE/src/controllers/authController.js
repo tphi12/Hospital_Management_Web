@@ -52,7 +52,7 @@ const Role = require('../models/Role');
 const login = async (req, res) => {
   try {
     const { username, password } = req.body;
-    
+
     // Validate input
     if (!username || !password) {
       return res.status(400).json({
@@ -60,7 +60,7 @@ const login = async (req, res) => {
         message: 'Vui lòng nhập đầy đủ username và password'
       });
     }
-    
+
     // Find user by username or email
     let user;
     // Check if input is email format
@@ -69,14 +69,14 @@ const login = async (req, res) => {
     } else {
       user = await User.findByUsername(username);
     }
-    
+
     if (!user) {
       return res.status(401).json({
         success: false,
         message: 'Email/Username hoặc password không chính xác'
       });
     }
-    
+
     // Check if user is active
     if (user.status !== 'active') {
       return res.status(403).json({
@@ -84,26 +84,26 @@ const login = async (req, res) => {
         message: 'Tài khoản đã bị khóa. Vui lòng liên hệ Admin để được hỗ trợ'
       });
     }
-    
+
     // Check password
     const isPasswordValid = await User.comparePassword(password, user.password_hash);
-    
+
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
         message: 'Email/Username hoặc password không chính xác'
       });
     }
-    
+
     // Update last login
     await User.updateLastLogin(user.user_id);
-    
+
     // Get user roles
     const userRoles = await Role.getUserRoles(user.user_id);
-    
+
     // Generate JWT token
     const token = jwt.sign(
-      { 
+      {
         userId: user.user_id,
         username: user.username,
         email: user.email
@@ -111,10 +111,10 @@ const login = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
-    
+
     // Remove password from response
     const { password_hash, ...userWithoutPassword } = user;
-    
+
     const loginResponse = {
       success: true,
       message: 'Đăng nhập thành công',
@@ -160,16 +160,16 @@ const login = async (req, res) => {
 const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
         message: 'Không tìm thấy người dùng'
       });
     }
-    
+
     const userRoles = await Role.getUserRoles(req.user.userId);
-    
+
     res.json({
       success: true,
       data: {
@@ -214,37 +214,37 @@ const getMe = async (req, res) => {
 const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
-    
+
     if (!currentPassword || !newPassword) {
       return res.status(400).json({
         success: false,
         message: 'Vui lòng nhập đầy đủ thông tin'
       });
     }
-    
+
     if (newPassword.length < 6) {
       return res.status(400).json({
         success: false,
         message: 'Mật khẩu mới phải có ít nhất 6 ký tự'
       });
     }
-    
+
     // Get user with password
     const user = await User.findByUsername(req.user.username);
-    
+
     // Verify current password
     const isPasswordValid = await User.comparePassword(currentPassword, user.password_hash);
-    
+
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
         message: 'Mật khẩu hiện tại không chính xác'
       });
     }
-    
+
     // Update password
     await User.update(req.user.userId, { password: newPassword });
-    
+
     res.json({
       success: true,
       message: 'Đổi mật khẩu thành công'

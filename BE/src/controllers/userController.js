@@ -43,7 +43,7 @@ const getAllUsers = async (req, res) => {
     const effectiveStatus = isAdmin ? status : (status || 'active');
 
     const users = await User.findAll(search, effectiveDepartmentId, effectiveStatus);
-    
+
     res.json({
       success: true,
       message: 'Lấy danh sách người dùng thành công',
@@ -80,18 +80,18 @@ const getAllUsers = async (req, res) => {
 const getUserById = async (req, res) => {
   try {
     const userId = req.params.id;
-    
+
     const user = await User.findById(userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
         message: 'Không tìm thấy người dùng'
       });
     }
-    
+
     const userRoles = await Role.getUserRoles(userId);
-    
+
     res.json({
       success: true,
       data: {
@@ -160,15 +160,15 @@ const getUserById = async (req, res) => {
  */
 const createUser = async (req, res) => {
   const connection = await pool.getConnection();
-  
+
   try {
     await connection.beginTransaction();
-    
+
     const {
       full_name, username, email, password, phone, employee_code,
       department_id, gender, date_of_birth, role_id, scope_type
     } = req.body;
-    
+
     // Validate required fields
     if (!full_name || !username || !email || !password || !phone || !department_id) {
       return res.status(400).json({
@@ -176,7 +176,7 @@ const createUser = async (req, res) => {
         message: 'Vui lòng nhập đầy đủ thông tin bắt buộc'
       });
     }
-    
+
     // Check if username exists
     const existingUsername = await User.findByUsername(username);
     if (existingUsername) {
@@ -185,7 +185,7 @@ const createUser = async (req, res) => {
         message: 'Username đã tồn tại'
       });
     }
-    
+
     // Check if email exists
     const existingEmail = await User.findByEmail(email);
     if (existingEmail) {
@@ -194,7 +194,7 @@ const createUser = async (req, res) => {
         message: 'Email đã tồn tại'
       });
     }
-    
+
     // Create user
     const userId = await User.create({
       full_name,
@@ -207,17 +207,17 @@ const createUser = async (req, res) => {
       gender,
       date_of_birth
     });
-    
+
     // Assign role if provided
     if (role_id) {
       const roleScope = scope_type || 'department';
       const roleDeptId = roleScope === 'department' ? department_id : null;
-      
+
       await Role.assignRoleToUser(userId, role_id, roleScope, roleDeptId);
     }
-    
+
     await connection.commit();
-    
+
     res.status(201).json({
       success: true,
       message: 'Tạo người dùng thành công',
@@ -281,7 +281,7 @@ const updateUser = async (req, res) => {
   try {
     const userId = req.params.id;
     const updateData = req.body;
-    
+
     // Check if user exists
     const existingUser = await User.findById(userId);
     if (!existingUser) {
@@ -290,7 +290,7 @@ const updateUser = async (req, res) => {
         message: 'Không tìm thấy người dùng'
       });
     }
-    
+
     // Check username uniqueness if changed
     if (updateData.username && updateData.username !== existingUser.username) {
       const usernameExists = await User.findByUsername(updateData.username);
@@ -301,7 +301,7 @@ const updateUser = async (req, res) => {
         });
       }
     }
-    
+
     // Check email uniqueness if changed
     if (updateData.email && updateData.email !== existingUser.email) {
       const emailExists = await User.findByEmail(updateData.email);
@@ -312,10 +312,10 @@ const updateUser = async (req, res) => {
         });
       }
     }
-    
+
     // Update user
     await User.update(userId, updateData);
-    
+
     res.json({
       success: true,
       message: 'Cập nhật người dùng thành công'
@@ -362,14 +362,14 @@ const updateUserStatus = async (req, res) => {
   try {
     const userId = req.params.id;
     const { status } = req.body;
-    
+
     if (!['active', 'inactive'].includes(status)) {
       return res.status(400).json({
         success: false,
         message: 'Trạng thái không hợp lệ'
       });
     }
-    
+
     // Check if user exists
     const user = await User.findById(userId);
     if (!user) {
@@ -378,12 +378,12 @@ const updateUserStatus = async (req, res) => {
         message: 'Không tìm thấy người dùng'
       });
     }
-    
+
     // Update status
     await User.updateStatus(userId, status);
-    
+
     const message = status === 'active' ? 'Mở khóa tài khoản thành công' : 'Khóa tài khoản thành công';
-    
+
     res.json({
       success: true,
       message
@@ -416,12 +416,12 @@ const updateUserStatus = async (req, res) => {
  */
 const deleteUser = async (req, res) => {
   const connection = await pool.getConnection();
-  
+
   try {
     await connection.beginTransaction();
-    
+
     const userId = req.params.id;
-    
+
     // Check if user exists
     const user = await User.findById(userId);
     if (!user) {
@@ -430,15 +430,15 @@ const deleteUser = async (req, res) => {
         message: 'Không tìm thấy người dùng'
       });
     }
-    
+
     // Remove all user roles
     await Role.removeAllUserRoles(userId);
-    
+
     // Delete user
     await User.delete(userId);
-    
+
     await connection.commit();
-    
+
     res.json({
       success: true,
       message: 'Xóa người dùng thành công'
@@ -493,14 +493,14 @@ const assignRole = async (req, res) => {
   try {
     const userId = req.params.id;
     const { role_id, scope_type, department_id } = req.body;
-    
+
     if (!role_id || !scope_type) {
       return res.status(400).json({
         success: false,
         message: 'Vui lòng nhập đầy đủ thông tin'
       });
     }
-    
+
     // Check if user exists
     const user = await User.findById(userId);
     if (!user) {
@@ -509,7 +509,7 @@ const assignRole = async (req, res) => {
         message: 'Không tìm thấy người dùng'
       });
     }
-    
+
     // Check if role exists
     const role = await Role.findById(role_id);
     if (!role) {
@@ -518,13 +518,13 @@ const assignRole = async (req, res) => {
         message: 'Không tìm thấy vai trò'
       });
     }
-    
+
     const roleDeptId = scope_type === 'department' ? (department_id || user.department_id) : null;
-    
+
     // Đảm bảo mỗi user chỉ có 1 vai trò: xóa hết rồi gán lại
     await Role.removeAllUserRoles(userId);
     await Role.assignRoleToUser(userId, role_id, scope_type, roleDeptId);
-    
+
     res.status(201).json({
       success: true,
       message: 'Phân quyền thành công'
@@ -539,6 +539,88 @@ const assignRole = async (req, res) => {
   }
 };
 
+/**
+ * @swagger
+ * /users/{id}/password:
+ *   patch:
+ *     tags: [Users]
+ *     summary: Đổi mật khẩu
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - currentPassword
+ *               - newPassword
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Đổi mật khẩu thành công
+ */
+const updatePassword = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { newPassword, currentPassword } = req.body;
+
+    if (!newPassword || !currentPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng nhập đầy đủ thông tin'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mật khẩu phải có ít nhất 6 ký tự'
+      });
+    }
+
+    if (newPassword === currentPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mật khẩu mới phải khác mật khẩu cũ'
+      });
+    }
+
+    // Check if user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng'
+      });
+    }
+
+    // Update password
+    await User.updatePassword(userId, newPassword);
+
+    res.json({
+      success: true,
+      message: 'Cập nhật mật khẩu thành công'
+    });
+  } catch (error) {
+    console.error('Update password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi cập nhật mật khẩu',
+      error: error.message
+    });
+  }
+}
+
 module.exports = {
   getAllUsers,
   getUserById,
@@ -546,5 +628,6 @@ module.exports = {
   updateUser,
   updateUserStatus,
   deleteUser,
-  assignRole
+  assignRole,
+  updatePassword
 };

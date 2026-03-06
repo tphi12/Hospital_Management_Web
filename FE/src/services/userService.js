@@ -7,6 +7,11 @@ export const userService = {
     return response.data;
   },
 
+  getMe: async () => {
+    const response = await api.get('/auth/me');
+    return response.data;
+  },
+
   // Lấy user theo ID
   getUserById: async (id) => {
     const response = await api.get(`/users/${id}`);

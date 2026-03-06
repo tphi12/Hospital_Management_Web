@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const http = require('http');
 require('dotenv').config();
 
 const { testConnection } = require('./config/database');
@@ -19,8 +20,34 @@ const documentRoutes = require('./routes/documentRoutes');
 const scheduleRoutes = require('./routes/scheduleRoutes');
 const shiftRoutes = require('./routes/shiftRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
+const { Server } = require('socket.io');
 
+// Initialize http
 const app = express();
+const httpServer = http.createServer(app);
+
+// Security middleware
+app.use(helmet());
+
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    methods: ["GET", "POST"],
+    allowedHeaders: ["*"],
+    credentials: true,
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('A user connected to socket.id', socket.id);
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected');
+  });
+});
+
+app.set('io', io);
+
 
 // Security middleware
 app.use(helmet());
@@ -113,7 +140,7 @@ app.use((req, res) => {
 // Global error handler
 app.use((err, req, res, next) => {
   console.error('Global error handler:', err);
-  
+
   res.status(err.status || 500).json({
     success: false,
     message: err.message || 'Lỗi server',
@@ -132,7 +159,7 @@ const startServer = async () => {
       console.error('❌ Failed to connect to database. Exiting...');
       process.exit(1);
     }
-    
+
     // Initialize Azure Storage
     const azureConnected = await initAzureStorage();
     if (!azureConnected) {
@@ -140,9 +167,9 @@ const startServer = async () => {
       console.warn('⚠️  Please check your Azure Storage configuration in .env file.');
       // Don't exit - allow server to run but with limited functionality
     }
-    
+
     // Start server
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log('═══════════════════════════════════════════════════════');
       console.log(`🏥 Hospital Management System API`);
       console.log(`🚀 Server running on port ${PORT}`);

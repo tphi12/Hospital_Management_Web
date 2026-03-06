@@ -69,6 +69,7 @@ const UserManagement = () => {
                     role: u.role || (u.role_name || u.role_code || u.roles
                         ? { name: u.role_name || u.role_code || u.roles }
                         : null),
+                    role_id: parseInt(u.role_ids || u.role_id, 10) || null,
                 }))
                 : [];
             setUsers(mapped);
@@ -187,12 +188,15 @@ const UserManagement = () => {
                 email: values.email,
                 phone: values.phone,
                 department_id: values.department_id,
+                new_password: values.confirmPassword || null,
                 role_id: values.role_id,
                 scope_type: 'department',
                 employee_code: values.employee_code || null,
                 gender: values.gender || null,
                 date_of_birth: values.date_of_birth || null,
             };
+
+            // console.log(payload);
 
             if (!editingUser) {
                 payload.password = values.password;
@@ -225,10 +229,10 @@ const UserManagement = () => {
             key: 'name',
             render: (text, record) => (
                 <Space>
-                    <Avatar 
-                        src={record.avatar} 
-                        shape="square" 
-                        size="large" 
+                    <Avatar
+                        src={record.avatar}
+                        shape="square"
+                        size="large"
                         icon={<UserOutlined />}
                         style={{ backgroundColor: '#1890ff' }}
                     >
@@ -393,8 +397,8 @@ const UserManagement = () => {
                             </Form.Item>
                         </Col>
                         <Col span={12}>
-                            <Form.Item 
-                                name="department_id" 
+                            <Form.Item
+                                name="department_id"
                                 label="Phòng ban"
                                 rules={[{ required: true, message: 'Vui lòng chọn phòng ban' }]}
                             >
@@ -407,13 +411,23 @@ const UserManagement = () => {
                         </Col>
                     </Row>
 
-                    {!editingUser && (
+                    {editingUser && (
                         <Row gutter={16}>
                             <Col span={12}>
                                 <Form.Item
                                     name="password"
                                     label="Mật khẩu"
-                                    rules={[{ required: true, message: 'Vui lòng nhập mật khẩu' }]}
+                                    dependencies={['confirmPassword']}
+                                    rules={[
+                                        ({ getFieldValue }) => ({
+                                            validator(_, value) {
+                                                if (getFieldValue('confirmPassword') && !value) {
+                                                    return Promise.reject(new Error('Vui lòng nhập mật khẩu!'));
+                                                }
+                                                return Promise.resolve();
+                                            },
+                                        }),
+                                    ]}
                                 >
                                     <Input.Password placeholder="******" />
                                 </Form.Item>
@@ -424,13 +438,16 @@ const UserManagement = () => {
                                     label="Xác nhận mật khẩu"
                                     dependencies={['password']}
                                     rules={[
-                                        { required: true, message: 'Vui lòng xác nhận mật khẩu' },
                                         ({ getFieldValue }) => ({
                                             validator(_, value) {
-                                                if (!value || getFieldValue('password') === value) {
-                                                    return Promise.resolve();
+                                                const password = getFieldValue('password');
+                                                if (password && !value) {
+                                                    return Promise.reject(new Error('Vui lòng xác nhận mật khẩu!'));
                                                 }
-                                                return Promise.reject(new Error('Mật khẩu không khớp!'));
+                                                if (password && value !== password) {
+                                                    return Promise.reject(new Error('Mật khẩu không khớp!'));
+                                                }
+                                                return Promise.resolve();
                                             },
                                         }),
                                     ]}
@@ -441,8 +458,8 @@ const UserManagement = () => {
                         </Row>
                     )}
 
-                    <Form.Item 
-                        name="role_id" 
+                    <Form.Item
+                        name="role_id"
                         label="Vai trò hệ thống"
                         rules={[{ required: true, message: 'Vui lòng chọn vai trò' }]}
                     >

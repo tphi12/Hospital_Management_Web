@@ -46,7 +46,7 @@ const MENU_CONFIG = [
                 icon: <FileText size={18} />,
                 allowedRoles: [ROLES.ADMIN, ROLES.HOSPITAL_CLERK, ROLES.HEAD_OF_DEPT, ROLES.STAFF, ROLES.DEPT_CLERK],
             },
-                        {
+            {
                 label: "Duyệt tài liệu",
                 path: "/documents/approvals",
                 icon: <BookOpenCheck size={18} />,
@@ -79,7 +79,7 @@ const MENU_CONFIG = [
                 label: "Lịch công tác tuần",
                 path: "/schedule/weekly",
                 icon: <CalendarDays size={18} />,
-                allowedRoles: [ROLES.KHTH ],
+                allowedRoles: [ROLES.KHTH],
             },
             {
                 label: "Toàn viện",

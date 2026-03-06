@@ -191,12 +191,16 @@ const RoleManagement = () => {
                             itemLayout="horizontal"
                             dataSource={filteredPermissions}
                             renderItem={(item) => {
-                                const hasAccess = hasPermission(item.id, selectedRole);
+                                const [hasAccess, setHasAccess] = useState(hasPermission(item.id, selectedRole));
+                                console.log(item.id, selectedRole);
                                 return (
                                     <List.Item
                                         actions={[
                                             isEditing ? (
-                                                <Switch checked={hasAccess} />
+                                                <Switch
+                                                    checked={hasAccess}
+                                                    onChange={() => { console.log("hello"); }}
+                                                />
                                             ) : (
                                                 hasAccess ? (
                                                     <Tag color="success" icon={<CheckOutlined />}>Được phép</Tag>

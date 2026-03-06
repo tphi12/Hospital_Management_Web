@@ -62,17 +62,14 @@ const DocumentUpload = () => {
             const formData = new FormData();
             formData.append('title', values.title);
             formData.append('category_id', values.categoryId);
-            if (values.description) {
-                formData.append('description', values.description);
-            }
             formData.append('file', fileList[0]);
 
             await documentService.uploadDocument(formData);
-            
+
             messageApi.success("Upload tài liệu thành công!");
             form.resetFields();
             setFileList([]);
-            
+
             setTimeout(() => {
                 try {
                     navigate('/documents/upload');
@@ -152,7 +149,7 @@ const DocumentUpload = () => {
                                 name="categoryId"
                                 rules={[{ required: true, message: 'Vui lòng chọn danh mục' }]}
                             >
-                                <Select 
+                                <Select
                                     placeholder="Chọn danh mục"
                                     showSearch
                                     filterOption={(input, option) =>
@@ -165,10 +162,6 @@ const DocumentUpload = () => {
                                         </Option>
                                     ))}
                                 </Select>
-                            </Form.Item>
-
-                            <Form.Item label="Mô tả" name="description">
-                                <Input.TextArea placeholder="Mô tả ngắn gọn..." rows={3} />
                             </Form.Item>
 
                             <Form.Item label="File đính kèm" required tooltip="File PDF, Word, Excel, Ảnh. Max 50MB.">
@@ -184,10 +177,10 @@ const DocumentUpload = () => {
                             </Form.Item>
 
                             <Form.Item className="mb-0 text-right">
-                                <Button 
-                                    type="primary" 
-                                    htmlType="submit" 
-                                    size="large" 
+                                <Button
+                                    type="primary"
+                                    htmlType="submit"
+                                    size="large"
                                     icon={<CloudUploadOutlined />}
                                     loading={uploading}
                                     disabled={uploading}

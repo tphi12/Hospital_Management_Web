@@ -58,7 +58,7 @@ const DocumentList = () => {
         } catch (error) {
             console.error('Fetch documents error:', error);
             messageApi.error('Lỗi tải danh sách tài liệu');
-            setDocuments([]); 
+            setDocuments([]);
         } finally {
             setLoading(false);
         }
@@ -96,7 +96,7 @@ const DocumentList = () => {
             const formData = new FormData();
             formData.append('title', values.title);
             formData.append('category_id', values.category_id);
-            
+
             await documentService.updateDocument(currentDoc.document_id, formData);
             messageApi.success("Cập nhật tài liệu thành công!");
             setIsEditModalOpen(false);
@@ -125,15 +125,15 @@ const DocumentList = () => {
         }
 
         const hideLoading = messageApi.loading('Đang tải file...', 0);
-        
+
         try {
             // Download through backend API to avoid CORS
             const token = localStorage.getItem('token');
             const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
             const downloadUrl = `${apiUrl}/documents/${doc.document_id}/download`;
-            
+
             console.log('Downloading from:', downloadUrl);
-            
+
             // Fetch with authorization
             const response = await fetch(downloadUrl, {
                 method: 'GET',
@@ -141,41 +141,41 @@ const DocumentList = () => {
                     'Authorization': `Bearer ${token}`
                 }
             });
-            
+
             console.log('Response status:', response.status, response.statusText);
-            
+
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error('Download error response:', errorText);
                 throw new Error(`Download failed: ${response.status} ${response.statusText}`);
             }
-            
+
             // Get blob from response
             const blob = await response.blob();
             console.log('Blob size:', blob.size, 'type:', blob.type);
-            
+
             // Create download URL
             const blobUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = blobUrl;
             link.download = doc.file_name || 'document';
             link.style.display = 'none';
-            
+
             document.body.appendChild(link);
             link.click();
-            
+
             // Cleanup after a short delay
             setTimeout(() => {
                 document.body.removeChild(link);
                 window.URL.revokeObjectURL(blobUrl);
             }, 100);
-            
+
             hideLoading();
             messageApi.success('Tải file thành công!');
         } catch (error) {
             hideLoading();
             console.error('Download error:', error);
-            
+
             // Check if it's a network error
             if (error.message.includes('Failed to fetch')) {
                 messageApi.error('Không thể kết nối đến server. Vui lòng kiểm tra xem backend đang chạy?');
@@ -312,9 +312,9 @@ const DocumentList = () => {
                 </div>
             </div>
 
-            <Card 
-                variant="borderless" 
-                className="shadow-sm flex-1 flex flex-col overflow-hidden" 
+            <Card
+                variant="borderless"
+                className="shadow-sm flex-1 flex flex-col overflow-hidden"
                 styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', height: '100%' } }}
             >
                 <div className="p-4 border-b border-slate-100 flex justify-between items-center">
@@ -365,9 +365,9 @@ const DocumentList = () => {
                         <Descriptions.Item label="Người duyệt">{currentDoc.approved_by_name || '-'}</Descriptions.Item>
                         <Descriptions.Item label="Ngày duyệt">{formatDate(currentDoc.approved_at)}</Descriptions.Item>
                         <Descriptions.Item label="File URL">
-                            <Button 
-                                type="link" 
-                                size="small" 
+                            <Button
+                                variant="contained"
+                                size="small"
                                 icon={<DownloadOutlined />}
                                 onClick={() => handleDownload(currentDoc)}
                             >
@@ -392,7 +392,7 @@ const DocumentList = () => {
                         <Input placeholder="Nhập tên tài liệu" />
                     </Form.Item>
                     <Form.Item name="category_id" label="Danh mục" rules={[{ required: true, message: 'Vui lòng chọn danh mục' }]}>
-                        <Select 
+                        <Select
                             placeholder="Chọn danh mục"
                             showSearch
                             filterOption={(input, option) =>
