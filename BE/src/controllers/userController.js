@@ -1,6 +1,8 @@
 const User = require('../models/User');
 const Role = require('../models/Role');
 const { pool } = require('../config/database');
+const azureStorageService = require('../config/azureStorage');
+const { generateFileName } = require('../middleware/upload');
 
 /**
  * @swagger
@@ -539,6 +541,156 @@ const assignRole = async (req, res) => {
   }
 };
 
+/**
+ * @swagger
+ * /users/{id}/password:
+ *   patch:
+ *     tags: [Users]
+ *     summary: Đặc quyền đổi mật khẩu người dùng (ADMIN only)
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - newPassword
+ *             properties:
+ *               newPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Đổi mật khẩu thành công
+ */
+const resetPassword = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { newPassword } = req.body;
+    
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mật khẩu mới phải có ít nhất 6 ký tự'
+      });
+    }
+    
+    // Check if user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng'
+      });
+    }
+    
+    // Update password
+    await User.update(userId, { password: newPassword });
+    
+    res.json({
+      success: true,
+      message: 'Đổi mật khẩu người dùng thành công'
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi đổi mật khẩu',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @swagger
+ * /users/{id}/avatar:
+ *   post:
+ *     tags: [Users]
+ *     summary: Tải lên ảnh đại diện
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Tải lên ảnh đại diện thành công
+ */
+const uploadAvatar = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    
+    // Check if user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng'
+      });
+    }
+
+    // Check permissions: only the user themselves or an admin can change their avatar
+    const userRoles = req.user?.roles || [];
+    const isAdmin = userRoles.some(role => role.role_code === 'ADMIN');
+    if (req.user.userId.toString() !== userId.toString() && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền thay đổi ảnh đại diện của người khác'
+      });
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng chọn file ảnh'
+      });
+    }
+
+    // Upload to Azure
+    const fileName = generateFileName(req.file.originalname);
+    const avatarUrl = await azureStorageService.uploadFile(
+      'avatars', // Note: Make sure this container exists, else maybe use 'documents' or create one on Azure
+      req.file.buffer,
+      fileName,
+      req.file.mimetype
+    );
+
+    // Update user avatar
+    await User.update(userId, { avatar_path: avatarUrl });
+
+    res.json({
+      success: true,
+      message: 'Cập nhật ảnh đại diện thành công',
+      data: {
+        avatarUrl
+      }
+    });
+  } catch (error) {
+    console.error('Upload avatar error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi tải lên ảnh đại diện',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllUsers,
   getUserById,
@@ -546,5 +698,7 @@ module.exports = {
   updateUser,
   updateUserStatus,
   deleteUser,
-  assignRole
+  assignRole,
+  resetPassword,
+  uploadAvatar
 };
