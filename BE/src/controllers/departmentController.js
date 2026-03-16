@@ -284,11 +284,68 @@ const getDepartmentMembers = async (req, res) => {
   }
 };
 
+/**
+ * @swagger
+ * /departments/{id}/members:
+ *   post:
+ *     tags: [Departments]
+ *     summary: Thêm thành viên vào phòng ban (ADMIN only)
+ */
+const addMember = async (req, res) => {
+  try {
+    const departmentId = req.params.id;
+    const { user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn người dùng' });
+    }
+
+    const dept = await Department.findById(departmentId);
+    if (!dept) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy phòng ban' });
+    }
+
+    const { pool } = require('../config/database');
+    await pool.execute('UPDATE USER SET department_id = ? WHERE user_id = ?', [departmentId, user_id]);
+
+    res.json({ success: true, message: 'Thêm thành viên thành công' });
+  } catch (error) {
+    console.error('Add member error:', error);
+    res.status(500).json({ success: false, message: 'Lỗi thêm thành viên', error: error.message });
+  }
+};
+
+/**
+ * @swagger
+ * /departments/{id}/members/{userId}:
+ *   delete:
+ *     tags: [Departments]
+ *     summary: Xóa thành viên khỏi phòng ban (ADMIN only)
+ */
+const removeMember = async (req, res) => {
+  try {
+    const { id: departmentId, userId } = req.params;
+
+    const { pool } = require('../config/database');
+    await pool.execute(
+      'UPDATE USER SET department_id = NULL WHERE user_id = ? AND department_id = ?',
+      [userId, departmentId]
+    );
+
+    res.json({ success: true, message: 'Xoá thành viên thành công' });
+  } catch (error) {
+    console.error('Remove member error:', error);
+    res.status(500).json({ success: false, message: 'Lỗi xoá thành viên', error: error.message });
+  }
+};
+
 module.exports = {
   getAllDepartments,
   getDepartmentById,
   createDepartment,
   updateDepartment,
   deleteDepartment,
-  getDepartmentMembers
+  getDepartmentMembers,
+  addMember,
+  removeMember
 };

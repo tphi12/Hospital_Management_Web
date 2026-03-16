@@ -36,6 +36,18 @@ export const departmentService = {
     const response = await api.delete(`/departments/${id}`);
     return response.data;
   },
+
+  // Thêm thành viên vào department (Admin only)
+  addMemberToDepartment: async (deptId, userId) => {
+    const response = await api.post(`/departments/${deptId}/members`, { user_id: userId });
+    return response.data;
+  },
+
+  // Xóa thành viên khỏi department (Admin only)
+  removeMemberFromDepartment: async (deptId, userId) => {
+    const response = await api.delete(`/departments/${deptId}/members/${userId}`);
+    return response.data;
+  },
 };
 
 export default departmentService;
