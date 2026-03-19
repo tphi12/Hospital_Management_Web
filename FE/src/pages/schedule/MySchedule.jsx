@@ -1,12 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Calendar, Badge, Modal, Typography, Button, Input, TimePicker, Checkbox, Form, Tag, Tooltip, Layout, Menu, Popconfirm, Select, Dropdown } from 'antd';
 import { Plus, Calendar as CalendarIcon, Clock, AlignLeft, MapPin, Trash2, X, ChevronLeft, ChevronRight, Menu as MenuIcon } from 'lucide-react';
 import dayjs from 'dayjs';
 import 'dayjs/locale/vi';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 
-// Import Shared Data
-import { DUTY_DATA, INITIAL_WEEKLY_DATA } from '../../lib/mockScheduleData';
+// Import service
+import userScheduleService from '../../services/userScheduleService';
 
 dayjs.locale('vi');
 dayjs.extend(customParseFormat);
@@ -14,9 +14,6 @@ dayjs.extend(customParseFormat);
 const { Title, Text } = Typography;
 const { Sider, Content } = Layout;
 const { TextArea } = Input;
-
-// --- CONFIG ---
-const CURRENT_USER_NAME = "BS Tân";
 
 const COLORS = {
     personal: { bg: '#039be5', text: '#fff' }, // Google Blue
@@ -39,58 +36,85 @@ const MySchedule = () => {
     });
     const [form] = Form.useForm();
 
+    // API data state
+    const [dutySchedules, setDutySchedules] = useState([]);
+    const [weeklyWorkItems, setWeeklyWorkItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    // Fetch user's schedule data on component mount
+    useEffect(() => {
+        const fetchScheduleData = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+
+                console.log('Fetching schedule data for current user...');
+
+                const [dutyRes, weeklyRes] = await Promise.all([
+                    userScheduleService.getUserDutySchedules(),
+                    userScheduleService.getUserWeeklyWorkItems()
+                ]);
+
+                console.log('Duty Schedules Response:', dutyRes);
+                console.log('Weekly Work Items Response:', weeklyRes);
+
+                if (dutyRes.success) {
+                    console.log(`Loaded ${dutyRes.data.length} duty schedules`);
+                    setDutySchedules(dutyRes.data);
+                }
+
+                if (weeklyRes.success) {
+                    console.log(`Loaded ${weeklyRes.data.length} weekly work items`);
+                    setWeeklyWorkItems(weeklyRes.data);
+                }
+
+                if (dutyRes.data?.length === 0 && weeklyRes.data?.length === 0) {
+                    setError('Bạn chưa được gán lịch hoặc công tác nào. Liên hệ với quản lý để được gán lịch.');
+                }
+            } catch (err) {
+                console.error('Failed to fetch schedule data:', err);
+                setError(err.message || 'Lỗi tải dữ liệu lịch');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchScheduleData();
+    }, []);
+
     // Derived Events (memoized to avoid setState in effect)
     const allEvents = useMemo(() => {
         const events = [];
 
-        // 1. Sync from Duty Schedule
-        if (visibleCalendars.duty) {
-            DUTY_DATA.forEach(duty => {
-                const isLeader = duty.leader.includes(CURRENT_USER_NAME);
-                const isDoctor = Object.values(duty.doctors).some(name => name.includes(CURRENT_USER_NAME));
-
-                if (isLeader || isDoctor) {
-                    const dateParts = duty.date.split('/');
-                    const dateStr = `2025-${dateParts[1]}-${dateParts[0]}`;
-
-                    events.push({
-                        id: `duty-${dateStr}`,
-                        date: dateStr,
-                        title: isLeader ? "Trực Lãnh Đạo" : "Trực Chuyên Môn",
-                        type: 'duty',
-                        color: 'duty',
-                        details: `Vai trò: ${isLeader ? 'Lãnh đạo' : 'Bác sĩ'}. Cùng trực: ${duty.doctors.general}, ...`
-                    });
-                }
+        // 1. Sync from Duty Schedule API
+        if (visibleCalendars.duty && dutySchedules.length > 0) {
+            dutySchedules.forEach(shift => {
+                events.push({
+                    id: `duty-${shift.shift_id}-${shift.shift_date}`,
+                    date: shift.shift_date,
+                    title: `${shift.shift_type === 'morning' ? 'Sáng' : shift.shift_type === 'afternoon' ? 'Chiều' : 'Tối'}: Trực`,
+                    type: 'duty',
+                    color: 'duty',
+                    details: `${shift.start_time} - ${shift.end_time} | ${shift.department_name || 'N/A'}`,
+                    time: shift.start_time
+                });
             });
         }
 
-        // 2. Sync from Weekly Schedule
-        if (visibleCalendars.weekly) {
-            INITIAL_WEEKLY_DATA.forEach(week => {
-                const dateParts = week.date.split('/');
-                const dateStr = `2025-${dateParts[1]}-${dateParts[0]}`;
-
-                if (week.morning.includes(CURRENT_USER_NAME)) {
-                    events.push({
-                        id: `weekly-mor-${dateStr}`,
-                        date: dateStr,
-                        title: "Sáng: Công tác",
-                        type: 'weekly',
-                        color: 'weekly',
-                        details: week.morning
-                    });
-                }
-                if (week.afternoon.includes(CURRENT_USER_NAME)) {
-                    events.push({
-                        id: `weekly-aft-${dateStr}`,
-                        date: dateStr,
-                        title: "Chiều: Công tác",
-                        type: 'weekly',
-                        color: 'weekly',
-                        details: week.afternoon
-                    });
-                }
+        // 2. Sync from Weekly Work Items API
+        if (visibleCalendars.weekly && weeklyWorkItems.length > 0) {
+            weeklyWorkItems.forEach(item => {
+                events.push({
+                    id: `weekly-${item.weekly_work_item_id}`,
+                    date: item.work_date,
+                    title: `${item.time_period}: Công tác`,
+                    type: 'weekly',
+                    color: 'weekly',
+                    details: item.content,
+                    location: item.location,
+                    participants: item.participants
+                });
             });
         }
 
@@ -100,7 +124,7 @@ const MySchedule = () => {
         }
 
         return events;
-    }, [visibleCalendars, personalEvents]);
+    }, [visibleCalendars, personalEvents, dutySchedules, weeklyWorkItems]);
 
     // --- HANDLERS ---
 
@@ -114,9 +138,14 @@ const MySchedule = () => {
     }
 
     const handleAddEvent = (values) => {
+        // Convert date string (from HTML input) to YYYY-MM-DD format
+        const dateStr = typeof values.date === 'string' 
+            ? values.date 
+            : dayjs(values.date).format('YYYY-MM-DD');
+
         const newEvent = {
             id: `personal-${Date.now()}`,
-            date: values.date.format('YYYY-MM-DD'),
+            date: dateStr,
             title: values.title,
             type: 'personal',
             color: 'personal',
@@ -143,37 +172,40 @@ const MySchedule = () => {
         }
     };
 
-    const dateCellRender = (value) => {
-        const dateStr = value.format('YYYY-MM-DD');
-        const dayEvents = allEvents.filter(e => e.date === dateStr);
+    const cellRender = (current, info) => {
+        if (info.type === 'date') {
+            const dateStr = current.format('YYYY-MM-DD');
+            const dayEvents = allEvents.filter(e => e.date === dateStr);
 
-        return (
-            <ul className="events p-0 m-0 list-none space-y-0.5 mt-0.5" onClick={(event) => event.stopPropagation()}>
-                {dayEvents.map((item) => {
-                    const style = COLORS[item.color];
-                    return (
-                        <li key={item.id}>
-                            <Tooltip title={item.title + (item.time ? ` · ${item.time}` : "")}>
-                                <div
-                                    className="px-2 py-0.5 text-xs font-medium cursor-pointer transition-all hover:brightness-90 flex items-center gap-1 truncate rounded-[4px]"
-                                    style={{
-                                        backgroundColor: style.bg,
-                                        color: style.text,
-                                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                                    }}
-                                    onClick={(e) => handleEventClick(e, item)}
-                                >
-                                    <span className="truncate font-semibold text-[11px] leading-tight">
-                                        {item.time && item.time !== 'All Day' ? <span className="opacity-90 mr-1 font-normal">{item.time}</span> : null}
-                                        {item.title}
-                                    </span>
-                                </div>
-                            </Tooltip>
-                        </li>
-                    )
-                })}
-            </ul>
-        );
+            return (
+                <ul className="events p-0 m-0 list-none space-y-0.5 mt-0.5" onClick={(event) => event.stopPropagation()}>
+                    {dayEvents.map((item) => {
+                        const style = COLORS[item.color];
+                        return (
+                            <li key={item.id}>
+                                <Tooltip title={item.title + (item.time ? ` · ${item.time}` : "")}>
+                                    <div
+                                        className="px-2 py-0.5 text-xs font-medium cursor-pointer transition-all hover:brightness-90 flex items-center gap-1 truncate rounded-[4px]"
+                                        style={{
+                                            backgroundColor: style.bg,
+                                            color: style.text,
+                                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                        }}
+                                        onClick={(e) => handleEventClick(e, item)}
+                                    >
+                                        <span className="truncate font-semibold text-[11px] leading-tight">
+                                            {item.time && item.time !== 'All Day' ? <span className="opacity-90 mr-1 font-normal">{item.time}</span> : null}
+                                            {item.title}
+                                        </span>
+                                    </div>
+                                </Tooltip>
+                            </li>
+                        )
+                    })}
+                </ul>
+            );
+        }
+        return info.originNode;
     };
 
     return (
@@ -201,7 +233,7 @@ const MySchedule = () => {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <Select defaultValue="month" style={{ width: 100 }} bordered={false}>
+                    <Select defaultValue="month" style={{ width: 100 }} variant="borderless">
                         <Select.Option value="month">Tháng</Select.Option>
                         <Select.Option value="week">Tuần</Select.Option>
                         <Select.Option value="day">Ngày</Select.Option>
@@ -212,6 +244,16 @@ const MySchedule = () => {
                 </div>
             </div>
 
+            {/* Error Banner */}
+            {error && (
+                <div className="bg-red-50 border-b border-red-200 px-6 py-3 text-red-700 flex items-center justify-between">
+                    <span>{error}</span>
+                    <Button type="text" size="small" onClick={() => setError(null)}>
+                        Đóng
+                    </Button>
+                </div>
+            )}
+
             <Layout className="flex-1 overflow-hidden">
                 {/* Sidebar / Filters - Cleaner Look */}
                 <Sider width={260} theme="light" className="p-4 hidden md:block border-r border-slate-100 overflow-y-auto">
@@ -220,7 +262,7 @@ const MySchedule = () => {
                             type="text"
                             className="h-12 rounded-full shadow-md border hover:bg-slate-50 flex items-center gap-3 px-4 transition-all hover:shadow-lg bg-white"
                             onClick={() => {
-                                form.setFieldValue('date', selectedDate);
+                                form.setFieldValue('date', selectedDate.format('YYYY-MM-DD'));
                                 setIsAddModalOpen(true);
                             }}
                         >
@@ -242,7 +284,7 @@ const MySchedule = () => {
                                     onChange={(e) => setVisibleCalendars({ ...visibleCalendars, personal: e.target.checked })}
                                     style={{ accentColor: COLORS.personal.bg }}
                                 />
-                                <span className="text-sm text-slate-700 font-medium">Cá nhân (BS Tân)</span>
+                                <span className="text-sm text-slate-700 font-medium">Cá nhân</span>
                             </div>
                             <div className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 rounded cursor-pointer transition-colors">
                                 <Checkbox
@@ -266,7 +308,7 @@ const MySchedule = () => {
                 <Content className="bg-white flex-1 relative custom-calendar-wrapper">
                     <Calendar
                         value={currentMonth}
-                        dateCellRender={dateCellRender}
+                        cellRender={cellRender}
                         onSelect={handleDateSelect}
                         onPanelChange={handlePanelChange}
                         headerRender={() => null} // Hide default header

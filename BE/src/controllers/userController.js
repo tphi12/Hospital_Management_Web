@@ -539,6 +539,177 @@ const assignRole = async (req, res) => {
   }
 };
 
+/**
+ * Get users for picker/select (KHTH/ADMIN can view all, STAFF see their dept)
+ * Query params: department_id (optional), search (optional)
+ */
+const getUsersForPicker = async (req, res) => {
+  try {
+    const { department_id, search } = req.query;
+    const userRoles = req.user?.roles || [];
+    const isAdmin = userRoles.some((role) => role.role_code === 'ADMIN');
+    const isKHTH = userRoles.some((role) => role.role_code === 'STAFF' && req.user?.department_type === 'special');
+
+    // Filter by department
+    let effectiveDeptId = department_id ? parseInt(department_id, 10) : null;
+    
+    if (!isAdmin && !isKHTH) {
+      // Regular staff: can only see their own department
+      effectiveDeptId = req.user?.department_id;
+    }
+
+    // Get users with department info
+    const [users] = await pool.execute(
+      `SELECT 
+        u.user_id,
+        u.username,
+        u.full_name,
+        u.email,
+        u.department_id,
+        d.department_name,
+        d.department_code
+       FROM USER u
+       LEFT JOIN DEPARTMENT d ON u.department_id = d.department_id
+       WHERE u.status = 'active'
+       ${effectiveDeptId ? `AND u.department_id = ?` : ''}
+       ${search ? `AND (LOWER(u.full_name) LIKE LOWER(?) OR LOWER(u.username) LIKE LOWER(?))` : ''}
+       ORDER BY u.full_name ASC
+       LIMIT 100`,
+      [
+        ...(effectiveDeptId ? [effectiveDeptId] : []),
+        ...(search ? [`%${search}%`, `%${search}%`] : [])
+      ]
+    );
+
+    res.json({
+      success: true,
+      data: users.map(u => ({
+        user_id: u.user_id,
+        username: u.username,
+        full_name: u.full_name,
+        email: u.email,
+        department_id: u.department_id,
+        department_name: u.department_name,
+        department_code: u.department_code
+      }))
+    });
+  } catch (error) {
+    console.error('Get users for picker error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi lấy danh sách người dùng',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get users by their IDs (for displaying existing participant names)
+ */
+const getUsersByIds = async (req, res) => {
+  try {
+    const { userIds } = req.query;
+    
+    if (!userIds) {
+      return res.json({
+        success: true,
+        data: []
+      });
+    }
+
+    let ids = [];
+    try {
+      // userIds could be comma-separated string or JSON array string
+      if (typeof userIds === 'string') {
+        if (userIds.startsWith('[')) {
+          ids = JSON.parse(userIds);
+        } else {
+          ids = userIds.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id));
+        }
+      } else if (Array.isArray(userIds)) {
+        ids = userIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+      }
+    } catch (e) {
+      console.warn('Error parsing userIds:', userIds, e);
+      return res.json({
+        success: true,
+        data: []
+      });
+    }
+
+    if (ids.length === 0) {
+      return res.json({
+        success: true,
+        data: []
+      });
+    }
+
+    // Build placeholders for IN clause
+    const placeholders = ids.map(() => '?').join(',');
+    
+    const [users] = await pool.execute(
+      `SELECT 
+        u.user_id,
+        u.username,
+        u.full_name,
+        u.email,
+        u.department_id,
+        d.department_name,
+        d.department_code
+       FROM USER u
+       LEFT JOIN DEPARTMENT d ON u.department_id = d.department_id
+       WHERE u.user_id IN (${placeholders})
+       ORDER BY u.full_name ASC`,
+      ids
+    );
+
+    res.json({
+      success: true,
+      data: users.map(u => ({
+        user_id: u.user_id,
+        username: u.username,
+        full_name: u.full_name,
+        email: u.email,
+        department_id: u.department_id,
+        department_name: u.department_name,
+        department_code: u.department_code
+      }))
+    });
+  } catch (error) {
+    console.error('Get users by IDs error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi lấy thông tin người dùng',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get all departments for filter
+ */
+const getDepartmentsForFilter = async (req, res) => {
+  try {
+    const [departments] = await pool.execute(
+      `SELECT department_id, department_name, department_code
+       FROM DEPARTMENT
+       ORDER BY department_name ASC`
+    );
+
+    res.json({
+      success: true,
+      data: departments
+    });
+  } catch (error) {
+    console.error('Get departments error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi lấy danh sách phòng ban',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllUsers,
   getUserById,
@@ -546,5 +717,8 @@ module.exports = {
   updateUser,
   updateUserStatus,
   deleteUser,
-  assignRole
+  assignRole,
+  getUsersForPicker,
+  getUsersByIds,
+  getDepartmentsForFilter
 };

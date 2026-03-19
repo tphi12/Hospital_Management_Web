@@ -14,19 +14,20 @@ class WeeklyWorkItem {
    * @param {Object} data
    * @param {number} data.schedule_id   - FK → SCHEDULE.schedule_id
    * @param {string} data.work_date     - YYYY-MM-DD
+   * @param {string} data.time_period   - 'Sáng' hoặc 'Chiều'
    * @param {string} data.content       - Description of the work / activity
    * @param {string} [data.location]    - Where the work takes place (optional)
-   * @param {string} [data.participants]- Free-text or JSON list of participants (optional)
+   * @param {string} [data.participants]- JSON array of user_ids (optional)
    * @returns {Promise<number>} Inserted row ID
    */
   static async create(data) {
-    const { schedule_id, work_date, content, location = null, participants = null } = data;
+    const { schedule_id, work_date, time_period = 'Sáng', content, location = null, participants = null } = data;
 
     const [result] = await pool.execute(
       `INSERT INTO WEEKLY_WORK_ITEM
-         (schedule_id, work_date, content, location, participants, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, NOW(), NOW())`,
-      [schedule_id, work_date, content, location, participants]
+         (schedule_id, work_date, time_period, content, location, participants, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      [schedule_id, work_date, time_period, content, location, participants]
     );
 
     return result.insertId;
@@ -123,6 +124,47 @@ class WeeklyWorkItem {
       [scheduleId]
     );
     return result.affectedRows > 0;
+  }
+
+  /**
+   * Get all weekly work items where the user is a participant
+   *
+   * @param {number} userId - User ID to search for in participants
+   * @param {Object} filters - Optional filters (from_date, to_date)
+   * @returns {Promise<Array>} - List of weekly work items with schedule details
+   */
+  static async findByUser(userId, filters = {}) {
+    console.log('[WeeklyWorkItem.findByUser] userId:', userId, 'type:', typeof userId);
+    console.log('[WeeklyWorkItem.findByUser] filters:', filters);
+    
+    let query = `
+      SELECT wi.*, 
+             s.schedule_id, s.schedule_type, s.week, s.year, s.status as schedule_status,
+             s.description as schedule_description, s.created_by
+      FROM WEEKLY_WORK_ITEM wi
+      JOIN SCHEDULE s ON wi.schedule_id = s.schedule_id
+      WHERE JSON_CONTAINS(wi.participants, JSON_QUOTE(CAST(? AS CHAR)))
+    `;
+    
+    const params = [userId.toString()];
+    
+    if (filters.from_date) {
+      query += ` AND wi.work_date >= ?`;
+      params.push(filters.from_date);
+    }
+    
+    if (filters.to_date) {
+      query += ` AND wi.work_date <= ?`;
+      params.push(filters.to_date);
+    }
+    
+    query += ` ORDER BY wi.work_date ASC, wi.weekly_work_item_id ASC`;
+    
+    console.log('[WeeklyWorkItem.findByUser] Query:', query);
+    console.log('[WeeklyWorkItem.findByUser] Params:', params);
+    const [rows] = await pool.execute(query, params);
+    console.log('[WeeklyWorkItem.findByUser] Result count:', rows.length);
+    return rows;
   }
 }
 

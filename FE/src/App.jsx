@@ -149,8 +149,8 @@ function App() {
             <Route
               path="/schedule/weekly"
               element={
-                <ProtectedRoute allowedRoles={[ROLES.KHTH]}>
-                  <WeeklySchedule role={ROLES.ADMIN} />
+                <ProtectedRoute allowedRoles={[ROLES.KHTH, ROLES.ADMIN]}>
+                  <WeeklySchedule />
                 </ProtectedRoute>
               }
             />

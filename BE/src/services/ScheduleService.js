@@ -387,10 +387,12 @@ class ScheduleService {
     const khth = await Department.findByCode('KHTH');
     if (!khth) throw new Error('KHTH department not found in system');
 
-    // Only MANAGER of KHTH may create
-    const hasPermission = await this.hasRole(userId, 'MANAGER', 'department', khth.department_id);
-    if (!hasPermission) {
-      throw new Error('Only KHTH MANAGER can create weekly work schedules');
+    // Allow: MANAGER of KHTH OR any STAFF in KHTH department
+    const hasManagerRole = await this.hasRole(userId, 'MANAGER', 'department', khth.department_id);
+    const hasStaffRole = await this.hasRole(userId, 'STAFF', 'department', khth.department_id);
+    
+    if (!hasManagerRole && !hasStaffRole) {
+      throw new Error('Only KHTH MANAGER or KHTH STAFF can create weekly work schedules');
     }
 
     // Duplicate check (same week/year for weekly_work)
@@ -436,7 +438,7 @@ class ScheduleService {
    * @returns {Promise<number>} New WeeklyWorkItem ID
    */
   static async addWeeklyWorkItem(data) {
-    const { scheduleId, workDate, content, location, participants } = data;
+    const { scheduleId, workDate, timePeriod = 'Sáng', content, location, participantIds } = data;
 
     if (!scheduleId) throw new Error('Schedule ID is required');
     if (!workDate)   throw new Error('Work date is required');
@@ -447,6 +449,11 @@ class ScheduleService {
       throw new Error('Work date must be in YYYY-MM-DD format');
     }
 
+    const validTimePeriods = ['Sáng', 'Chiều'];
+    if (!validTimePeriods.includes(timePeriod)) {
+      throw new Error('Time period must be "Sáng" or "Chiều"');
+    }
+
     const schedule = await Schedule.findById(scheduleId);
     if (!schedule) throw new Error('Schedule not found');
 
@@ -454,15 +461,114 @@ class ScheduleService {
       throw new Error('Work items can only be added to weekly_work schedules');
     }
 
+    // Convert participantIds array to JSON string
+    let participantsJson = null;
+    if (Array.isArray(participantIds) && participantIds.length > 0) {
+      participantsJson = JSON.stringify(participantIds);
+    }
+
     const itemId = await WeeklyWorkItem.create({
       schedule_id:  scheduleId,
       work_date:    workDate,
+      time_period:  timePeriod,
       content,
       location:     location || null,
-      participants: participants || null
+      participants: participantsJson
     });
 
     return itemId;
+  }
+
+  /**
+   * Import weekly work items from parsed rows.
+   * Strategy: import valid rows, skip invalid rows, and return per-row errors.
+   *
+   * @param {Object} data
+   * @param {number} data.scheduleId
+   * @param {Array<Object>} data.items
+   * @returns {Promise<{totalRows:number,successCount:number,failedCount:number,errors:Array}>}
+   */
+  static async importWeeklyWorkItems(data) {
+    const { scheduleId, items } = data;
+
+    if (!scheduleId) throw new Error('Schedule ID is required');
+    if (!Array.isArray(items)) throw new Error('Items must be an array');
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) throw new Error('Schedule not found');
+
+    if (schedule.schedule_type !== ScheduleType.WEEKLY_WORK) {
+      throw new Error('Work items can only be imported to weekly_work schedules');
+    }
+
+    const errors = [];
+    let successCount = 0;
+
+    for (let index = 0; index < items.length; index += 1) {
+      const row = items[index] || {};
+      const rowNumber = row.rowNumber || index + 2;
+
+      const workDate = String(row.work_date || '').trim();
+      const timePeriod = String(row.time_period || 'Sáng').trim();
+      const content = String(row.content || '').trim();
+      const location = row.location ? String(row.location).trim() : null;
+      const participants = row.participants ? String(row.participants).trim() : null;
+
+      if (!workDate) {
+        errors.push({ row: rowNumber, field: 'work_date', message: 'Thiếu ngày công tác' });
+        continue;
+      }
+
+      if (!content) {
+        errors.push({ row: rowNumber, field: 'content', message: 'Thiếu nội dung công tác' });
+        continue;
+      }
+
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(workDate)) {
+        errors.push({
+          row: rowNumber,
+          field: 'work_date',
+          message: 'Ngày công tác phải theo định dạng YYYY-MM-DD'
+        });
+        continue;
+      }
+
+      const validTimePeriods = ['Sáng', 'Chiều'];
+      if (!validTimePeriods.includes(timePeriod)) {
+        errors.push({
+          row: rowNumber,
+          field: 'time_period',
+          message: 'Giờ công tác phải là "Sáng" hoặc "Chiều"'
+        });
+        continue;
+      }
+
+      try {
+        await WeeklyWorkItem.create({
+          schedule_id: scheduleId,
+          work_date: workDate,
+          time_period: timePeriod,
+          content,
+          location,
+          participants
+        });
+        successCount += 1;
+      } catch (error) {
+        errors.push({
+          row: rowNumber,
+          field: 'database',
+          message: error.message || 'Lỗi lưu dữ liệu vào hệ thống'
+        });
+      }
+    }
+
+    return {
+      totalRows: items.length,
+      successCount,
+      failedCount: errors.length,
+      errors
+    };
   }
 
   /**

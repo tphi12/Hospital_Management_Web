@@ -7,6 +7,7 @@ import { ROLES } from "../lib/roles";
 const normalizeUser = (apiUser = {}) => {
     const primaryRole = apiUser.roles?.[0]?.role_code || apiUser.roles?.[0]?.role_name || apiUser.role || ROLES.STAFF;
     const fallbackRoleDept = apiUser.roles?.find((r) => r?.department_code || r?.department_name);
+    
     return {
         id: apiUser.user_id,
         username: apiUser.username,
@@ -15,6 +16,7 @@ const normalizeUser = (apiUser = {}) => {
         departmentId: apiUser.department_id,
         departmentCode: apiUser.department_code || fallbackRoleDept?.department_code || null,
         departmentName: apiUser.department_name || fallbackRoleDept?.department_name || null,
+        departmentType: apiUser.department_type || null,
         roles: apiUser.roles || [],
         role: primaryRole,
     };
