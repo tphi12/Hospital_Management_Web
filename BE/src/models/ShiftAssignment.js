@@ -77,6 +77,9 @@ class ShiftAssignment {
    * @returns {Promise<Array>} - List of assignments
    */
   static async findByUser(userId, filters = {}) {
+    console.log('[ShiftAssignment.findByUser] userId:', userId, 'type:', typeof userId);
+    console.log('[ShiftAssignment.findByUser] filters:', filters);
+    
     let query = `
       SELECT sa.*, 
              sh.shift_date, sh.shift_type, sh.start_time, sh.end_time,
@@ -108,7 +111,10 @@ class ShiftAssignment {
     
     query += ` ORDER BY sh.shift_date DESC, sh.shift_type`;
     
+    console.log('[ShiftAssignment.findByUser] Query:', query);
+    console.log('[ShiftAssignment.findByUser] Params:', params);
     const [rows] = await pool.execute(query, params);
+    console.log('[ShiftAssignment.findByUser] Result count:', rows.length);
     return rows;
   }
 

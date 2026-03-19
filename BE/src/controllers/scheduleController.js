@@ -1,10 +1,12 @@
 const Schedule = require('../models/Schedule');
 const Shift = require('../models/Shift');
 const ShiftAssignment = require('../models/ShiftAssignment');
+const WeeklyWorkItem = require('../models/WeeklyWorkItem');
 const Department = require('../models/Department');
 const ScheduleService = require('../services/ScheduleService');
 const SchedulePdfService = require('../services/SchedulePdfService');
 const { pool } = require('../config/database');
+const XLSX = require('xlsx');
 
 const hasRoleCode = (user, roleCode) =>
   (user?.roles || []).some((role) => role?.role_code === roleCode);
@@ -341,6 +343,15 @@ const createSchedule = async (req, res) => {
     });
   } catch (error) {
     console.error('Create schedule error:', error);
+    
+    // Handle duplicate schedule error
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({
+        success: false,
+        message: 'Lịch công tác cho tuần này đã tồn tại. Vui lòng chọn từ danh sách lịch hiện có.'
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Lỗi tạo lịch',
@@ -709,6 +720,770 @@ const exportSchedulePdf = async (req, res) => {
   }
 };
 
+/**
+ * @swagger
+ * /schedules/{id}/weekly-items:
+ *   get:
+ *     tags: [Weekly Work Items]
+ *     summary: Lấy danh sách công tác tuần
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Thành công
+ */
+const getWeeklyWorkItems = async (req, res) => {
+  try {
+    const scheduleId = parseInt(req.params.id, 10);
+
+    if (Number.isNaN(scheduleId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID lịch không hợp lệ'
+      });
+    }
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch'
+      });
+    }
+
+    if (schedule.schedule_type !== 'weekly_work') {
+      return res.status(400).json({
+        success: false,
+        message: 'Chỉ lịch công tác tuần mới có công tác chi tiết'
+      });
+    }
+
+    const items = await WeeklyWorkItem.findBySchedule(scheduleId);
+    
+    // Parse participantIds from JSON
+    const parsedItems = items.map(item => ({
+      ...item,
+      participantIds: item.participants ? JSON.parse(item.participants) : []
+    }));
+    
+    res.json({
+      success: true,
+      data: parsedItems
+    });
+  } catch (error) {
+    console.error('Get weekly work items error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi lấy danh sách công tác',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @swagger
+ * /schedules/{scheduleId}/weekly-items/{itemId}:
+ *   get:
+ *     tags: [Weekly Work Items]
+ *     summary: Lấy chi tiết công tác
+ *     parameters:
+ *       - in: path
+ *         name: scheduleId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Thành công
+ */
+const getWeeklyWorkItemById = async (req, res) => {
+  try {
+    const itemId = parseInt(req.params.itemId, 10);
+    const scheduleId = parseInt(req.params.id, 10);
+
+    if (Number.isNaN(itemId) || Number.isNaN(scheduleId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID không hợp lệ'
+      });
+    }
+
+    const item = await WeeklyWorkItem.findById(itemId);
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy công tác'
+      });
+    }
+
+    // Verify item belongs to the schedule
+    if (item.schedule_id !== scheduleId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Công tác không thuộc lịch này'
+      });
+    }
+
+    // Parse participantIds from JSON
+    const responseData = {
+      ...item,
+      participantIds: item.participants ? JSON.parse(item.participants) : []
+    };
+
+    res.json({
+      success: true,
+      data: responseData
+    });
+  } catch (error) {
+    console.error('Get weekly work item error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi lấy chi tiết công tác',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @swagger
+ * /schedules/{id}/weekly-items:
+ *   post:
+ *     tags: [Weekly Work Items]
+ *     summary: Thêm công tác vào lịch tuần
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - work_date
+ *               - content
+ *             properties:
+ *               work_date:
+ *                 type: string
+ *                 format: date
+ *               content:
+ *                 type: string
+ *               location:
+ *                 type: string
+ *               participants:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Tạo thành công
+ */
+const addWeeklyWorkItem = async (req, res) => {
+  try {
+    const scheduleId = parseInt(req.params.id, 10);
+    const { work_date, time_period = 'Sáng', content, location, participantIds } = req.body;
+
+    if (Number.isNaN(scheduleId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID lịch không hợp lệ'
+      });
+    }
+
+    // Validate required fields
+    if (!work_date || !content) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng nhập đầy đủ thông tin (ngày và nội dung)'
+      });
+    }
+
+    const validTimePeriods = ['Sáng', 'Chiều'];
+    if (!validTimePeriods.includes(time_period)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Giờ công tác phải là "Sáng" hoặc "Chiều"'
+      });
+    }
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch'
+      });
+    }
+
+    if (schedule.schedule_type !== 'weekly_work') {
+      return res.status(400).json({
+        success: false,
+        message: 'Chỉ có thể thêm công tác vào lịch công tác tuần'
+      });
+    }
+
+    // Check permission - only KHTH staff can add items
+    const isKHTH = schedule.owner_department_id === req.user.department_id;
+    const isAdmin = hasRoleCode(req.user, 'ADMIN');
+    
+    if (!isKHTH && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Chỉ phòng KHTH mới có quyền thêm công tác'
+      });
+    }
+
+    const itemId = await ScheduleService.addWeeklyWorkItem({
+      scheduleId,
+      workDate: work_date,
+      timePeriod: time_period,
+      content,
+      location: location || null,
+      participantIds: participantIds || null
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Thêm công tác thành công',
+      data: { itemId }
+    });
+  } catch (error) {
+    console.error('Add weekly work item error:', error);
+    
+    if (error.message.includes('Week must be')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thông tin lịch không hợp lệ'
+      });
+    }
+    if (error.message === 'Schedule not found') {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch'
+      });
+    }
+    if (error.message.includes('weekly_work')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Chỉ có thể thêm công tác vào lịch công tác tuần'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi thêm công tác',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @swagger
+ * /schedules/{scheduleId}/weekly-items/{itemId}:
+ *   put:
+ *     tags: [Weekly Work Items]
+ *     summary: Cập nhật công tác
+ *     parameters:
+ *       - in: path
+ *         name: scheduleId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               work_date:
+ *                 type: string
+ *                 format: date
+ *               content:
+ *                 type: string
+ *               location:
+ *                 type: string
+ *               participants:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Cập nhật thành công
+ */
+const updateWeeklyWorkItem = async (req, res) => {
+  try {
+    const itemId = parseInt(req.params.itemId, 10);
+    const scheduleId = parseInt(req.params.id, 10);
+    const { work_date, time_period, content, location, participantIds } = req.body;
+
+    if (Number.isNaN(itemId) || Number.isNaN(scheduleId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID không hợp lệ'
+      });
+    }
+
+    const item = await WeeklyWorkItem.findById(itemId);
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy công tác'
+      });
+    }
+
+    if (item.schedule_id !== scheduleId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Công tác không thuộc lịch này'
+      });
+    }
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch'
+      });
+    }
+
+    // Check permission - only KHTH staff can update items
+    const isKHTH = schedule.owner_department_id === req.user.department_id;
+    const isAdmin = hasRoleCode(req.user, 'ADMIN');
+    
+    if (!isKHTH && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Chỉ phòng KHTH mới có quyền cập nhật công tác'
+      });
+    }
+
+    // Validate time_period if provided
+    if (time_period !== undefined) {
+      const validTimePeriods = ['Sáng', 'Chiều'];
+      if (!validTimePeriods.includes(time_period)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Giờ công tác phải là "Sáng" hoặc "Chiều"'
+        });
+      }
+    }
+
+    const updateData = {};
+    if (work_date !== undefined) updateData.work_date = work_date;
+    if (time_period !== undefined) updateData.time_period = time_period;
+    if (content !== undefined) updateData.content = content;
+    if (location !== undefined) updateData.location = location;
+    
+    // Convert participantIds array to JSON string
+    if (participantIds !== undefined) {
+      if (Array.isArray(participantIds) && participantIds.length > 0) {
+        updateData.participants = JSON.stringify(participantIds);
+      } else {
+        updateData.participants = null;
+      }
+    }
+
+    const updated = await WeeklyWorkItem.update(itemId, updateData);
+    
+    if (!updated) {
+      return res.status(400).json({
+        success: false,
+        message: 'Không có dữ liệu thay đổi'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Cập nhật công tác thành công'
+    });
+  } catch (error) {
+    console.error('Update weekly work item error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi cập nhật công tác',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @swagger
+ * /schedules/{scheduleId}/weekly-items/{itemId}:
+ *   delete:
+ *     tags: [Weekly Work Items]
+ *     summary: Xóa công tác
+ *     parameters:
+ *       - in: path
+ *         name: scheduleId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Xóa thành công
+ */
+const deleteWeeklyWorkItem = async (req, res) => {
+  try {
+    const itemId = parseInt(req.params.itemId, 10);
+    const scheduleId = parseInt(req.params.id, 10);
+
+    if (Number.isNaN(itemId) || Number.isNaN(scheduleId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID không hợp lệ'
+      });
+    }
+
+    const item = await WeeklyWorkItem.findById(itemId);
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy công tác'
+      });
+    }
+
+    if (item.schedule_id !== scheduleId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Công tác không thuộc lịch này'
+      });
+    }
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch'
+      });
+    }
+
+    // Check permission - only KHTH staff can delete items
+    const isKHTH = schedule.owner_department_id === req.user.department_id;
+    const isAdmin = hasRoleCode(req.user, 'ADMIN');
+    
+    if (!isKHTH && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Chỉ phòng KHTH mới có quyền xóa công tác'
+      });
+    }
+
+    await WeeklyWorkItem.delete(itemId);
+    
+    res.json({
+      success: true,
+      message: 'Xóa công tác thành công'
+    });
+  } catch (error) {
+    console.error('Delete weekly work item error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi xóa công tác',
+      error: error.message
+    });
+  }
+};
+
+const normalizeColumnName = (column = '') => {
+  return String(column)
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '_');
+};
+
+const mapImportRow = (row) => {
+  const mapped = {
+    work_date: '',
+    time_period: 'Sáng',
+    content: '',
+    location: '',
+    participants: ''
+  };
+
+  Object.entries(row || {}).forEach(([key, value]) => {
+    const normalizedKey = normalizeColumnName(key);
+
+    if (['work_date', 'ngay', 'ngay_cong_tac', 'date'].includes(normalizedKey)) {
+      mapped.work_date = value;
+      return;
+    }
+    if (['time_period', 'gio', 'gio_lam_viec', 'sang_chieu'].includes(normalizedKey)) {
+      mapped.time_period = value;
+      return;
+    }
+    if (['content', 'noi_dung', 'cong_tac', 'task'].includes(normalizedKey)) {
+      mapped.content = value;
+      return;
+    }
+    if (['location', 'dia_diem', 'noi_lam_viec'].includes(normalizedKey)) {
+      mapped.location = value;
+      return;
+    }
+    if (['participants', 'nguoi_tham_du', 'thanh_phan', 'user_ids'].includes(normalizedKey)) {
+      mapped.participants = value;
+    }
+  });
+
+  return mapped;
+};
+
+const parseWeeklyItemsFile = (file) => {
+  const workbook = XLSX.read(file.buffer, { type: 'buffer', cellDates: false });
+  const firstSheetName = workbook.SheetNames[0];
+
+  if (!firstSheetName) {
+    return [];
+  }
+
+  const worksheet = workbook.Sheets[firstSheetName];
+  const rows = XLSX.utils.sheet_to_json(worksheet, {
+    defval: '',
+    raw: false,
+    blankrows: false
+  });
+
+  return rows.map((row, index) => ({
+    ...mapImportRow(row),
+    rowNumber: index + 2
+  }));
+};
+
+
+const importWeeklyWorkItems = async (req, res) => {
+  try {
+    const scheduleId = parseInt(req.params.id, 10);
+
+    if (Number.isNaN(scheduleId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID lịch không hợp lệ'
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng chọn file để import (.xlsx, .xls hoặc .csv)'
+      });
+    }
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lịch'
+      });
+    }
+
+    if (schedule.schedule_type !== 'weekly_work') {
+      return res.status(400).json({
+        success: false,
+        message: 'Chỉ có thể import vào lịch công tác tuần'
+      });
+    }
+
+    const isKHTH = Number(schedule.owner_department_id) === Number(req.user.department_id);
+    const isAdmin = hasRoleCode(req.user, 'ADMIN');
+
+    if (!isKHTH && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Chỉ phòng KHTH mới có quyền import công tác'
+      });
+    }
+
+    const items = parseWeeklyItemsFile(req.file);
+    if (items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'File không có dữ liệu để import'
+      });
+    }
+
+    const result = await ScheduleService.importWeeklyWorkItems({
+      scheduleId,
+      items
+    });
+
+    return res.json({
+      success: true,
+      message: `Import hoàn tất: ${result.successCount}/${result.totalRows} dòng thành công`,
+      data: result
+    });
+  } catch (error) {
+    console.error('Import weekly work items error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi import công tác tuần',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @swagger
+ * /schedules/me/duty-schedules:
+ *   get:
+ *     tags: [Schedules]
+ *     summary: Lấy danh sách ca trực của người dùng hiện tại
+ *     parameters:
+ *       - in: query
+ *         name: from_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: to_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *     responses:
+ *       200:
+ *         description: Thành công
+ */
+const getUserDutySchedules = async (req, res) => {
+  try {
+    console.log('=== getUserDutySchedules ===');
+    console.log('User ID:', req.user?.userId);
+    console.log('User:', req.user);
+
+    const filters = {
+      status: req.query.status,
+      from_date: req.query.from_date,
+      to_date: req.query.to_date
+    };
+
+    console.log('Filters:', filters);
+    const shifts = await ShiftAssignment.findByUser(req.user.userId, filters);
+    console.log(`Found ${shifts.length} shift assignments`);
+    
+    res.json({
+      success: true,
+      data: shifts.map(shift => ({
+        shift_assignment_id: shift.shift_assignment_id,
+        shift_id: shift.shift_id,
+        user_id: shift.user_id,
+        shift_date: shift.shift_date,
+        shift_type: shift.shift_type,
+        start_time: shift.start_time,
+        end_time: shift.end_time,
+        department_name: shift.department_name,
+        department_code: shift.department_code,
+        status: shift.status,
+        note: shift.note,
+        assigned_at: shift.assigned_at
+      }))
+    });
+  } catch (error) {
+    console.error('Get user duty schedules error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi lấy danh sách ca trực',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @swagger
+ * /schedules/me/weekly-work-items:
+ *   get:
+ *     tags: [Schedules]
+ *     summary: Lấy danh sách công tác tuần của người dùng hiện tại
+ *     parameters:
+ *       - in: query
+ *         name: from_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: to_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *     responses:
+ *       200:
+ *         description: Thành công
+ */
+const getUserWeeklyWorkItems = async (req, res) => {
+  try {
+    console.log('=== getUserWeeklyWorkItems ===');
+    console.log('User ID:', req.user?.userId);
+    console.log('User:', req.user);
+
+    const filters = {
+      from_date: req.query.from_date,
+      to_date: req.query.to_date
+    };
+
+    console.log('Filters:', filters);
+    const items = await WeeklyWorkItem.findByUser(req.user.userId, filters);
+    console.log(`Found ${items.length} weekly work items`);
+    
+    // Parse participants JSON for each item
+    const processedItems = items.map(item => {
+      let participants = [];
+      try {
+        if (item.participants) {
+          participants = typeof item.participants === 'string' 
+            ? JSON.parse(item.participants) 
+            : item.participants;
+        }
+      } catch (e) {
+        console.warn('Failed to parse participants JSON:', item.participants);
+      }
+
+      return {
+        weekly_work_item_id: item.weekly_work_item_id,
+        schedule_id: item.schedule_id,
+        work_date: item.work_date,
+        time_period: item.time_period,
+        content: item.content,
+        location: item.location,
+        participants: Array.isArray(participants) ? participants : [],
+        week: item.week,
+        year: item.year,
+        schedule_status: item.schedule_status,
+        schedule_description: item.schedule_description,
+        created_at: item.created_at,
+        updated_at: item.updated_at
+      };
+    });
+
+    res.json({
+      success: true,
+      data: processedItems
+    });
+  } catch (error) {
+    console.error('Get user weekly work items error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi lấy danh sách công tác tuần',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllSchedules,
   getScheduleById,
@@ -718,5 +1493,13 @@ module.exports = {
   approveSchedule,
   deleteSchedule,
   exportSchedulePdf,
-  exportMasterDutySchedulePdf
+  exportMasterDutySchedulePdf,
+  getWeeklyWorkItems,
+  getWeeklyWorkItemById,
+  addWeeklyWorkItem,
+  importWeeklyWorkItems,
+  updateWeeklyWorkItem,
+  deleteWeeklyWorkItem,
+  getUserDutySchedules,
+  getUserWeeklyWorkItems
 };
