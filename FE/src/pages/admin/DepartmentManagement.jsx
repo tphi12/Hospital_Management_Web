@@ -174,6 +174,7 @@ const DepartmentManagement = () => {
                 department_name: values.name,
                 department_type: values.department_type || editingDept?.department_type || 'simple',
                 description: values.description || '',
+                head_id: values.head_id || null,
             };
 
             if (editingDept) {

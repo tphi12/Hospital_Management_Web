@@ -132,6 +132,11 @@ const createDepartment = async (req, res) => {
       description
     });
     
+    const { head_id } = req.body;
+    if (head_id) {
+      await Department.setManager(departmentId, head_id);
+    }
+    
     res.status(201).json({
       success: true,
       message: 'Tạo phòng ban thành công',
@@ -191,6 +196,11 @@ const updateDepartment = async (req, res) => {
     }
     
     await Department.update(departmentId, req.body);
+    
+    const { head_id } = req.body;
+    if (head_id !== undefined) {
+      await Department.setManager(departmentId, head_id || null);
+    }
     
     res.json({
       success: true,
