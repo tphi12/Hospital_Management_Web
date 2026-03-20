@@ -344,12 +344,19 @@ const DepartmentManagement = () => {
                     <Form.Item
                         name="head_id"
                         label="Trưởng phòng"
-                        tooltip="Chọn người quản lý phòng ban"
+                        tooltip="Chỉ có thể bổ nhiệm nhân viên đang thuộc phòng ban này."
                     >
-                        <Select placeholder="Chọn quản lý" allowClear showSearch filterOption={(input, option) =>
-                            option.children.toLowerCase().includes(input.toLowerCase())
+                        <Select 
+                            placeholder="Chọn quản lý" 
+                            allowClear 
+                            showSearch 
+                            disabled={!editingDept}
+                            filterOption={(input, option) =>
+                                option.children.toLowerCase().includes(input.toLowerCase())
                         }>
-                            {users.map(u => (
+                            {users
+                                .filter(u => editingDept && u.department_id === editingDept.id)
+                                .map(u => (
                                 <Select.Option key={u.id} value={u.id}>{u.name} ({u.email})</Select.Option>
                             ))}
                         </Select>
