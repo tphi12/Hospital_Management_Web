@@ -3,7 +3,6 @@ const router = express.Router();
 const userController = require('../controllers/userController');
 const auth = require('../middleware/auth');
 const { checkAdmin } = require('../middleware/authorize');
-const { upload, handleMulterError } = require('../middleware/upload');
 
 // All routes require authentication
 router.use(auth);
@@ -20,7 +19,5 @@ router.delete('/:id', checkAdmin, userController.deleteUser);
 router.post('/:id/roles', checkAdmin, userController.assignRole);
 router.patch('/:id/password', checkAdmin, userController.resetPassword);
 
-// Upload avatar
-router.post('/:id/avatar', upload.single('file'), handleMulterError, userController.uploadAvatar);
 
 module.exports = router;
