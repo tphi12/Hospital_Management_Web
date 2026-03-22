@@ -1,4 +1,5 @@
 import { useAuth } from "../hooks/useAuth";
+import dashboardService from "../services/dashboardService";
 import {
     UserOutlined,
     BankOutlined,
@@ -24,8 +25,8 @@ import {
     Cell,
     Legend
 } from 'recharts';
-import { useState } from "react";
-import { Card, Row, Col, Statistic, Table, Alert, Typography, Breadcrumb, Space } from "antd";
+import { useState, useEffect } from "react";
+import { Card, Row, Col, Statistic, Table, Alert, Typography, Breadcrumb, Space, Spin, message } from "antd";
 
 const { Title, Text } = Typography;
 
@@ -33,37 +34,60 @@ const Dashboard = () => {
     const { user } = useAuth();
     const [showBanner, setShowBanner] = useState(true);
 
-    // Mock Data
+    const [data, setData] = useState({
+        summary: { users: 0, departments: 0, documents: 0, schedules: 0 },
+        documentTypes: { word: 0, excel: 0, pdf: 0, image: 0 },
+        documentsByDepartment: []
+    });
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            try {
+                setLoading(true);
+                const res = await dashboardService.getStats();
+                if (res.data?.success) {
+                    setData(res.data.data);
+                } else {
+                    message.error("Lỗi khi tải dữ liệu dashboard");
+                }
+            } catch (error) {
+                console.error("Dashboard fetch error:", error);
+                message.error("Lỗi khi kết nối với máy chủ");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchDashboardData();
+    }, []);
+
+    // Derived Data for UI
     const STATS = [
-        { label: "Người Dùng", value: 16, sub: "+0 mới", icon: <UserOutlined />, color: "#1677ff", bg: "#e6f4ff" },
-        { label: "Phòng Ban", value: 11, sub: "100% hoạt động", icon: <BankOutlined />, color: "#52c41a", bg: "#f6ffed" },
-        { label: "Tài Liệu", value: 12, sub: "+0 mới", icon: <FileTextOutlined />, color: "#faad14", bg: "#fffbe6" },
-        { label: "Lịch Trực", value: 0, sub: "0/0 đã gửi", icon: <CalendarOutlined />, color: "#eb2f96", bg: "#fff0f6" },
+        { label: "Người Dùng", value: data.summary.users, sub: "Đang hoạt động", icon: <UserOutlined />, color: "#1677ff", bg: "#e6f4ff" },
+        { label: "Phòng Ban", value: data.summary.departments, sub: "Trên hệ thống", icon: <BankOutlined />, color: "#52c41a", bg: "#f6ffed" },
+        { label: "Tài Liệu", value: data.summary.documents, sub: "Tổng số lưu trữ", icon: <FileTextOutlined />, color: "#faad14", bg: "#fffbe6" },
+        { label: "Lịch Trực", value: data.summary.schedules, sub: "Đã phê duyệt", icon: <CalendarOutlined />, color: "#eb2f96", bg: "#fff0f6" },
     ];
 
-    const TABLE_DATA = [
-        { key: 1, name: "Phòng Kỹ Thuật", word: 0, excel: 1, pdf: 5, image: 0, total: 6 },
-        { key: 2, name: "Khoa Nội", word: 1, excel: 0, pdf: 0, image: 0, total: 2 },
-        { key: 3, name: "Khoa Ngoại", word: 0, excel: 0, pdf: 1, image: 0, total: 1 },
-        { key: 4, name: "Khoa Sản", word: 0, excel: 0, pdf: 1, image: 0, total: 1 },
-        { key: 5, name: "Khoa Nhi", word: 0, excel: 0, pdf: 0, image: 0, total: 0 },
-        { key: 6, name: "Khoa Tim mạch", word: 0, excel: 0, pdf: 0, image: 0, total: 0 },
-        { key: 7, name: "Khoa Răng Hàm Mặt", word: 0, excel: 0, pdf: 0, image: 0, total: 0 },
-    ];
+    const TABLE_DATA = data.documentsByDepartment.map((item, index) => ({
+        key: index,
+        ...item
+    }));
 
     const DOC_TYPES = [
-        { name: 'WORD', count: 1, color: "#1890ff", icon: <FileWordOutlined /> },
-        { name: 'EXCEL', count: 1, color: "#52c41a", icon: <FileExcelOutlined /> },
-        { name: 'PDF', count: 8, color: "#f5222d", icon: <FilePdfOutlined /> },
-        { name: 'IMAGE', count: 0, color: "#faad14", icon: <FileImageOutlined /> },
+        { name: 'WORD', count: data.documentTypes.word, color: "#1890ff", icon: <FileWordOutlined /> },
+        { name: 'EXCEL', count: data.documentTypes.excel, color: "#52c41a", icon: <FileExcelOutlined /> },
+        { name: 'PDF', count: data.documentTypes.pdf, color: "#f5222d", icon: <FilePdfOutlined /> },
+        { name: 'IMAGE', count: data.documentTypes.image, color: "#faad14", icon: <FileImageOutlined /> },
     ];
 
     const PIE_DATA = [
-        { name: 'Word', value: 1, color: '#1890ff' },
-        { name: 'Excel', value: 1, color: '#52c41a' },
-        { name: 'PDF', value: 8, color: '#f5222d' },
-        { name: 'Image', value: 0, color: '#faad14' },
-    ];
+        { name: 'Word', value: data.documentTypes.word, color: '#1890ff' },
+        { name: 'Excel', value: data.documentTypes.excel, color: '#52c41a' },
+        { name: 'PDF', value: data.documentTypes.pdf, color: '#f5222d' },
+        { name: 'Image', value: data.documentTypes.image, color: '#faad14' },
+    ].filter(item => item.value > 0);
 
     const BAR_DATA = TABLE_DATA.map(item => ({
         name: item.name,
@@ -79,6 +103,14 @@ const Dashboard = () => {
         { title: 'Tổng', dataIndex: 'total', key: 'total', align: 'center', render: v => <Text strong type="success">{v}</Text> },
     ];
 
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-full min-h-[500px]">
+                <Spin size="large" tip="Đang tải dữ liệu..." />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <Breadcrumb
@@ -88,10 +120,10 @@ const Dashboard = () => {
                 ]}
             />
 
-            {showBanner && (
+            {showBanner && user && (
                 <Alert
                     message="Thành công!"
-                    description={`Đăng nhập thành công! Chào mừng ${user.role === ROLES.ADMIN ? 'Quản trị viên' : user.name}`}
+                    description={`Đăng nhập thành công! Chào mừng ${user.role === ROLES.ADMIN ? 'Quản trị viên' : (user.fullName || user.username)}`}
                     type="success"
                     showIcon
                     closable

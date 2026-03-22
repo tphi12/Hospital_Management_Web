@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Role = require('../models/Role');
 const { pool } = require('../config/database');
 
+
 /**
  * @swagger
  * /users:
@@ -540,9 +541,71 @@ const assignRole = async (req, res) => {
 };
 
 /**
- * Get users for picker/select (KHTH/ADMIN can view all, STAFF see their dept)
- * Query params: department_id (optional), search (optional)
+ * @swagger
+ * /users/{id}/password:
+ *   patch:
+ *     tags: [Users]
+ *     summary: Đặc quyền đổi mật khẩu người dùng (ADMIN only)
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - newPassword
+ *             properties:
+ *               newPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Đổi mật khẩu thành công
  */
+const resetPassword = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { newPassword } = req.body;
+    
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mật khẩu mới phải có ít nhất 6 ký tự'
+      });
+    }
+    
+    // Check if user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng'
+      });
+    }
+    
+    // Update password
+    await User.update(userId, { password: newPassword });
+    
+    res.json({
+      success: true,
+      message: 'Đổi mật khẩu người dùng thành công'
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi đổi mật khẩu',
+      error: error.message
+    });
+  }
+};
+
+
 const getUsersForPicker = async (req, res) => {
   try {
     const { department_id, search } = req.query;
@@ -718,6 +781,7 @@ module.exports = {
   updateUserStatus,
   deleteUser,
   assignRole,
+  resetPassword,
   getUsersForPicker,
   getUsersByIds,
   getDepartmentsForFilter

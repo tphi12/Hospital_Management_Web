@@ -149,7 +149,9 @@ const Profile = () => {
                                     type="primary"
                                     shape="circle"
                                     icon={<CameraOutlined />}
+
                                     className="absolute bottom-4 right-0 shadow-md"
+
                                 />
                             </Upload>
                         </div>
