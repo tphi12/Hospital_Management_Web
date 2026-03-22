@@ -1,874 +1,512 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
-import { Calendar, Printer, Edit, Save, Plus, Trash2, X, Upload } from "lucide-react";
+import { Button, Spin } from "antd";
+import {
+  CalendarOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  UploadOutlined,
+} from "@ant-design/icons";
 import { ROLES } from "../../lib/roles";
-import { getEffectiveRoleCodes } from "../../lib/roleUtils";
+import { canManageKHTHSchedules, getEffectiveRoleCodes } from "../../lib/roleUtils";
 import { useAuth } from "../../hooks/useAuth";
-import scheduleService from "../../services/scheduleService";
+import {
+  addWeeklyWorkItem,
+  approveSchedule,
+  createWeeklyWorkSchedule,
+  deleteSchedule,
+  deleteWeeklyWorkItem,
+  getSchedules,
+  getWeeklyWorkItemById,
+  getWeeklyWorkItems,
+  importWeeklyWorkItems,
+  updateWeeklyWorkItem,
+} from "../../modules/schedule/api/scheduleApi";
 import api from "../../services/api";
 import { UserPicker } from "../../components/UserPicker";
+import { downloadSchedulePdf } from "../../modules/schedule/utils/downloadSchedulePdf";
+import {
+  ScheduleEmptyState,
+  ScheduleInlineBadge,
+  SchedulePageShell,
+  SchedulePanel,
+} from "../../modules/schedule/components/ScheduleWorkspace";
 
 dayjs.extend(isoWeek);
 
-const WeeklySchedule = ({
-  scheduleId,
-  week = 32,
-  year = 2025,
-  startDate = "04/08/2025",
-  endDate = "10/08/2025"
-}) => {
-  const { user } = useAuth();
-  
-  // Sử dụng roleUtils để xác định effective roles (bao gồm KHTH dù)
-  const effectiveRoleCodes = useMemo(
-    () => getEffectiveRoleCodes(user),
-    [user]
+const PERIOD_COLUMNS = [
+  { key: "Sang", label: "Sang" },
+  { key: "Chieu", label: "Chieu" },
+  { key: "Dem", label: "Dem" },
+];
+
+const getPeriodKey = (value) => {
+  if (value === "Chiều" || value === "Chieu") return "Chieu";
+  if (value === "Đêm" || value === "Dem" || value === "night") return "Dem";
+  return "Sang";
+};
+
+const getDateLabel = (value) => dayjs(value).format("DD/MM/YYYY");
+const getDayLabel = (value) => dayjs(value).format("dddd");
+
+function QueueCard({ title, description, badge, onOpen }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-slate-900">{title}</p>
+            {badge}
+          </div>
+          <p className="mt-2 text-sm text-slate-500">{description}</p>
+        </div>
+        <Button size="small" className="!rounded-full" onClick={onOpen}>Open</Button>
+      </div>
+    </div>
   );
+}
+
+function WeeklyItemCard({ item, participantLabel, canEdit, onEdit, onDelete }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900">{item.content}</p>
+          {item.location ? <p className="mt-2 text-xs text-slate-500">{item.location}</p> : null}
+          {participantLabel ? <p className="mt-2 text-xs text-slate-500">{participantLabel}</p> : null}
+        </div>
+        {canEdit ? (
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => onEdit(item.weekly_work_item_id)} className="text-xs font-medium text-slate-500 hover:text-slate-900">Sua</button>
+            <button type="button" onClick={() => onDelete(item.weekly_work_item_id)} className="text-xs font-medium text-red-600 hover:text-red-700">Xoa</button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export default function WeeklySchedule({ scheduleId }) {
+  const { user } = useAuth();
+  const effectiveRoleCodes = useMemo(() => getEffectiveRoleCodes(user), [user]);
+  const canEdit = effectiveRoleCodes.has(ROLES.ADMIN) || canManageKHTHSchedules(user);
 
   const [schedules, setSchedules] = useState([]);
   const [selectedScheduleId, setSelectedScheduleId] = useState(scheduleId || null);
-
   const [items, setItems] = useState([]);
+  const [userLookup, setUserLookup] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [editingItemId, setEditingItemId] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [userLookup, setUserLookup] = useState({});  // Map of userId -> user data for displaying names
-
+  const [editingItemId, setEditingItemId] = useState(null);
+  const [publishLoading, setPublishLoading] = useState(false);
+  const [deleteScheduleLoading, setDeleteScheduleLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
-  const [importResult, setImportResult] = useState(null);
-
+  const [exportLoading, setExportLoading] = useState(false);
   const [formData, setFormData] = useState({
     work_date: "",
     time_period: "Sáng",
     content: "",
     location: "",
-    participantIds: []
+    participantIds: [],
   });
-
   const fileInputRef = useRef(null);
 
-  const canEdit =
-    effectiveRoleCodes.has(ROLES.ADMIN) ||
-    effectiveRoleCodes.has(ROLES.KHTH);
+  const selectedSchedule = schedules.find((item) => Number(item.schedule_id) === Number(selectedScheduleId));
+  const draftSchedules = schedules.filter((item) => item.status === "draft");
+  const publishedSchedules = schedules.filter((item) => item.status === "approved");
 
-  const activeScheduleId = selectedScheduleId || scheduleId || null;
-  const selectedSchedule = schedules.find(
-    (s) => Number(s.schedule_id) === Number(activeScheduleId)
-  );
-
-  const displayWeek = selectedSchedule?.week ?? week;
-  const displayYear = selectedSchedule?.year ?? year;
-
-  useEffect(() => {
-    fetchWeeklySchedules();
-  }, []);
-
-  useEffect(() => {
-    if (!activeScheduleId) {
-      setItems([]);
-      return;
-    }
-    fetchWeeklyWorkItems(activeScheduleId);
-  }, [activeScheduleId]);
-
-  const fetchWeeklySchedules = async () => {
+  const fetchSchedules = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-
-      const response = await scheduleService.getAllSchedules({
-        schedule_type: "weekly_work"
-      });
-
+      const response = await getSchedules({ schedule_type: "weekly_work" });
       if (!response.success) {
-        setError(response.message || "Lỗi lấy danh sách lịch công tác");
+        setError(response.message || "Loi lay lich cong tac");
         return;
       }
-
       const list = Array.isArray(response.data) ? response.data : [];
       setSchedules(list);
-
-      if (list.length === 0) {
+      if (!list.length) {
         setSelectedScheduleId(null);
         setItems([]);
         return;
       }
-
-      const hasCurrent = list.some(
-        (s) => Number(s.schedule_id) === Number(selectedScheduleId || scheduleId)
-      );
-
-      if (!hasCurrent) {
+      if (!list.some((item) => Number(item.schedule_id) === Number(selectedScheduleId || scheduleId))) {
         setSelectedScheduleId(list[0].schedule_id);
       }
-    } catch (err) {
-      const msg = err.response?.data?.message || err.message || "Lỗi kết nối API";
-      setError(msg);
     } finally {
       setLoading(false);
     }
-  };
+  }, [scheduleId, selectedScheduleId]);
 
-  const fetchWeeklyWorkItems = async (targetScheduleId = activeScheduleId) => {
-    try {
-      if (!targetScheduleId) {
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-      const response = await scheduleService.getWeeklyWorkItems(targetScheduleId);
-
-      if (response.success) {
-        const loadedItems = response.data || [];
-        setItems(loadedItems);
-
-        // Extract all unique participant IDs from items
-        const participantIds = new Set();
-        loadedItems.forEach(item => {
-          if (Array.isArray(item.participantIds)) {
-            item.participantIds.forEach(id => participantIds.add(id));
-          }
-        });
-
-        // Fetch user data for all participants
-        if (participantIds.size > 0) {
-          try {
-            const response = await api.get('/users/picker/by-ids', {
-              params: { userIds: JSON.stringify(Array.from(participantIds)) }
-            });
-            if (response.data.success) {
-              const lookup = {};
-              response.data.data.forEach(user => {
-                lookup[user.user_id] = user;
-              });
-              setUserLookup(lookup);
-            }
-          } catch (err) {
-            // Don't fail the main operation if user fetch fails
-          }
-        }
-      } else {
-        setError(response.message || "Lỗi lấy danh sách công tác");
-      }
-    } catch (err) {
-      const msg = err.response?.data?.message || err.message || "Lỗi kết nối API";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCreateSchedule = async () => {
+  const fetchItems = useCallback(async (targetId = selectedScheduleId || scheduleId) => {
+    if (!targetId) return;
     try {
       setLoading(true);
       setError(null);
-
-      const currentWeek = dayjs().isoWeek();
-      const currentYear = dayjs().year();
-
-      const existingSchedule = schedules.find(
-        (s) =>
-          Number(s.week) === Number(currentWeek) &&
-          Number(s.year) === Number(currentYear) &&
-          s.schedule_type === "weekly_work"
-      );
-
-      if (existingSchedule) {
-        setSelectedScheduleId(existingSchedule.schedule_id);
-        setError('Lịch công tác tuần này đã tồn tại');
-        setLoading(false);
+      const response = await getWeeklyWorkItems(Number(targetId));
+      if (!response.success) {
+        setError(response.message || "Loi lay cong tac");
         return;
       }
+      const nextItems = response.data || [];
+      setItems(nextItems);
 
-      const response = await scheduleService.createSchedule({
-        schedule_type: "weekly_work",
-        week: currentWeek,
-        year: currentYear,
-        description: `Lịch công tác tuần ${currentWeek} năm ${currentYear}`
+      const ids = [...new Set(nextItems.flatMap((item) => item.participantIds || []))];
+      if (!ids.length) {
+        setUserLookup({});
+        return;
+      }
+      const picker = await api.get("/users/picker/by-ids", { params: { userIds: JSON.stringify(ids) } });
+      const lookup = {};
+      (picker.data.data || []).forEach((participant) => {
+        lookup[participant.user_id] = participant;
       });
-
-      if (!response || !response.success) {
-        setError(response?.message || "Lỗi tạo lịch mới");
-        setLoading(false);
-        return;
-      }
-
-      const newScheduleId = response?.data?.scheduleId || response?.data?.schedule_id;
-      
-      await fetchWeeklySchedules();
-      if (newScheduleId) {
-        setSelectedScheduleId(newScheduleId);
-      }
-      setLoading(false);
-    } catch (err) {
-      let errorMsg = "Lỗi tạo lịch mới";
-      
-      if (err.response?.data?.message) {
-        errorMsg = err.response.data.message;
-      } else if (err.message) {
-        errorMsg = err.message;
-      }
-      
-      console.error('handleCreateSchedule error:', err);
-      setError(errorMsg);
+      setUserLookup(lookup);
+    } finally {
       setLoading(false);
     }
-  };
+  }, [scheduleId, selectedScheduleId]);
+
+  useEffect(() => {
+    fetchSchedules();
+  }, [fetchSchedules]);
+
+  useEffect(() => {
+    if (selectedScheduleId || scheduleId) fetchItems(selectedScheduleId || scheduleId);
+  }, [fetchItems, scheduleId, selectedScheduleId]);
 
   const resetForm = () => {
-    setFormData({
-      work_date: "",
-      time_period: "Sáng",
-      content: "",
-      location: "",
-      participantIds: []
-    });
+    setFormData({ work_date: "", time_period: "Sáng", content: "", location: "", participantIds: [] });
     setEditingItemId(null);
     setShowForm(false);
   };
 
-  const handleAddItem = async (e) => {
-    e.preventDefault();
-
-    if (!formData.work_date || !formData.content) {
-      setError("Vui lòng nhập ngày và nội dung công tác");
+  const handleCreateSchedule = async () => {
+    const now = dayjs();
+    const response = await createWeeklyWorkSchedule({
+      week: now.isoWeek(),
+      year: now.year(),
+      description: `Lich cong tac tuan ${now.isoWeek()} nam ${now.year()}`,
+    });
+    if (!response.success) {
+      setError(response.message || "Loi tao lich moi");
       return;
     }
-
-    if (!activeScheduleId || Number.isNaN(parseInt(activeScheduleId, 10))) {
-      setError("Lỗi: Không tìm thấy ID lịch hợp lệ. Vui lòng chọn lịch trước khi thêm công tác.");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await scheduleService.addWeeklyWorkItem(activeScheduleId, {
-        work_date: formData.work_date,
-        time_period: formData.time_period,
-        content: formData.content,
-        location: formData.location || null,
-        participantIds: formData.participantIds.length > 0 ? formData.participantIds : null
-      });
-
-      if (response.success) {
-        resetForm();
-        await fetchWeeklyWorkItems(activeScheduleId);
-      } else {
-        setError(response.message || "Lỗi thêm công tác");
-      }
-    } catch (err) {
-      const msg = err.response?.data?.message || err.message || "Lỗi kết nối API";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    await fetchSchedules();
   };
 
   const handleEditStart = async (itemId) => {
-    if (!activeScheduleId || Number.isNaN(parseInt(activeScheduleId, 10))) {
-      setError("Lỗi: Không tìm thấy ID lịch hợp lệ.");
+    const response = await getWeeklyWorkItemById(Number(selectedScheduleId), Number(itemId));
+    if (!response.success) {
+      setError(response.message || "Loi lay chi tiet cong tac");
       return;
     }
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await scheduleService.getWeeklyWorkItemById(activeScheduleId, itemId);
-      if (response.success) {
-        const item = response.data;
-        const participantIds = Array.isArray(item.participantIds) 
-          ? item.participantIds 
-          : [];
-        
-        setFormData({
-          work_date: item.work_date,
-          time_period: item.time_period || "Sáng",
-          content: item.content,
-          location: item.location || "",
-          participantIds: participantIds
-        });
-        setEditingItemId(itemId);
-        setShowForm(true);
-      } else {
-        setError(response.message || "Lỗi lấy thông tin công tác");
-      }
-    } catch (err) {
-      const msg = err.response?.data?.message || err.message || "Lỗi kết nối API";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    const item = response.data;
+    setFormData({
+      work_date: item.work_date,
+      time_period: item.time_period || "Sáng",
+      content: item.content,
+      location: item.location || "",
+      participantIds: item.participantIds || [],
+    });
+    setEditingItemId(itemId);
+    setShowForm(true);
   };
 
-  const handleUpdateItem = async (e) => {
-    e.preventDefault();
+  const handleSaveItem = async (event) => {
+    event.preventDefault();
+    const payload = {
+      work_date: formData.work_date,
+      time_period: formData.time_period,
+      content: formData.content,
+      location: formData.location || null,
+      participantIds: formData.participantIds.length ? formData.participantIds : null,
+    };
+    const response = editingItemId
+      ? await updateWeeklyWorkItem(Number(selectedScheduleId), Number(editingItemId), payload)
+      : await addWeeklyWorkItem({ schedule_id: Number(selectedScheduleId), ...payload });
 
-    if (!formData.work_date || !formData.content) {
-      setError("Vui lòng nhập ngày và nội dung công tác");
+    if (!response.success) {
+      setError(response.message || "Khong the luu cong tac");
       return;
     }
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await scheduleService.updateWeeklyWorkItem(
-        activeScheduleId,
-        editingItemId,
-        {
-          work_date: formData.work_date,
-          time_period: formData.time_period,
-          content: formData.content,
-          location: formData.location || null,
-          participantIds: formData.participantIds.length > 0 ? formData.participantIds : null
-        }
-      );
-
-      if (response.success) {
-        resetForm();
-        await fetchWeeklyWorkItems(activeScheduleId);
-      } else {
-        setError(response.message || "Lỗi cập nhật công tác");
-      }
-    } catch (err) {
-      const msg = err.response?.data?.message || err.message || "Lỗi kết nối API";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    resetForm();
+    await fetchItems(selectedScheduleId);
   };
 
   const handleDeleteItem = async (itemId) => {
-    if (!window.confirm("Bạn chắc chắn muốn xóa công tác này?")) {
+    if (!window.confirm("Ban chac chan muon xoa cong tac nay?")) return;
+    const response = await deleteWeeklyWorkItem(Number(selectedScheduleId), Number(itemId));
+    if (!response.success) {
+      setError(response.message || "Khong the xoa cong tac");
       return;
     }
+    await fetchItems(selectedScheduleId);
+  };
 
-    if (!activeScheduleId || Number.isNaN(parseInt(activeScheduleId, 10))) {
-      setError("Lỗi: Không tìm thấy ID lịch hợp lệ.");
-      return;
-    }
-
+  const handleDeleteWeeklySchedule = async () => {
+    if (!selectedSchedule?.schedule_id) return;
+    if (!window.confirm("Ban chac chan muon xoa lich cong tac tuan nay?")) return;
     try {
-      setLoading(true);
-      setError(null);
-
-      const response = await scheduleService.deleteWeeklyWorkItem(activeScheduleId, itemId);
-      if (response.success) {
-        await fetchWeeklyWorkItems(activeScheduleId);
-      } else {
-        setError(response.message || "Lỗi xóa công tác");
+      setDeleteScheduleLoading(true);
+      const response = await deleteSchedule(Number(selectedSchedule.schedule_id));
+      if (!response.success) {
+        setError(response.message || "Khong the xoa lich cong tac tuan");
+        return;
       }
-    } catch (err) {
-      const msg = err.response?.data?.message || err.message || "Lỗi kết nối API";
-      setError(msg);
+      resetForm();
+      setSelectedScheduleId(null);
+      setItems([]);
+      await fetchSchedules();
     } finally {
-      setLoading(false);
+      setDeleteScheduleLoading(false);
     }
   };
 
-  const handleImportClick = () => {
-    if (!activeScheduleId) {
-      setError("Vui lòng chọn lịch công tác trước khi import file.");
-      return;
+  const handlePublish = async () => {
+    if (!selectedSchedule?.schedule_id) return;
+    if (!window.confirm("Publish weekly work schedule?")) return;
+    try {
+      setPublishLoading(true);
+      const response = await approveSchedule(Number(selectedSchedule.schedule_id));
+      if (!response.success) {
+        setError(response.message || "Khong the dang lich");
+        return;
+      }
+      await fetchSchedules();
+      await fetchItems(selectedSchedule.schedule_id);
+    } finally {
+      setPublishLoading(false);
     }
-
-    fileInputRef.current?.click();
   };
 
-  const handleImportFile = async (event) => {
+  const handleImport = async (event) => {
     const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    if (!activeScheduleId) {
-      setError("Vui lòng chọn lịch công tác trước khi import file.");
-      event.target.value = "";
-      return;
-    }
-
+    if (!file || !selectedScheduleId) return;
     try {
       setImportLoading(true);
-      setError(null);
-      setImportResult(null);
-
-      const response = await scheduleService.importWeeklyWorkItems(activeScheduleId, file);
-
-      if (response.success) {
-        setImportResult(response.data || null);
-        await fetchWeeklyWorkItems(activeScheduleId);
-      } else {
-        setError(response.message || "Import thất bại");
+      const response = await importWeeklyWorkItems(Number(selectedScheduleId), file);
+      if (!response.success) {
+        setError(response.message || "Import that bai");
+        return;
       }
-    } catch (err) {
-      const msg = err.response?.data?.message || err.message || "Lỗi kết nối API";
-      setError(msg);
+      await fetchItems(selectedScheduleId);
     } finally {
       setImportLoading(false);
       event.target.value = "";
     }
   };
 
-  const itemsByDateAndPeriod = useMemo(() => {
-    const grouped = {};
-    items.forEach((item) => {
-      const date = item.work_date;
-      const period = item.time_period || "Sáng";
-      const key = `${date}`;
-      
-      if (!grouped[key]) {
-        grouped[key] = { Sáng: [], Chiều: [] };
-      }
-      grouped[key][period].push(item);
-    });
-    return grouped;
+  const handleExportPdf = async () => {
+    if (!selectedSchedule) return;
+    try {
+      setExportLoading(true);
+      const result = await downloadSchedulePdf({ ...selectedSchedule, schedule_type: "weekly_work" });
+      if (!result.success) setError(result.message || "Khong the xuat PDF");
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const scheduleMatrix = useMemo(() => {
+    const matrix = new Map();
+    [...items]
+      .sort((a, b) => {
+        const dateCompare = String(a.work_date).localeCompare(String(b.work_date));
+        if (dateCompare !== 0) return dateCompare;
+        return (PERIOD_COLUMNS.findIndex((item) => item.key === getPeriodKey(a.time_period))) -
+          (PERIOD_COLUMNS.findIndex((item) => item.key === getPeriodKey(b.time_period)));
+      })
+      .forEach((item) => {
+        const dateKey = String(item.work_date).slice(0, 10);
+        if (!matrix.has(dateKey)) {
+          matrix.set(dateKey, { date: dateKey, Sang: [], Chieu: [], Dem: [] });
+        }
+        matrix.get(dateKey)[getPeriodKey(item.time_period)].push(item);
+      });
+    return Array.from(matrix.values());
   }, [items]);
 
-  // Helper: Lấy thứ từ ngày
-  const getDayOfWeek = (dateString) => {
-    try {
-      const date = dayjs(dateString);
-      const days = ["CN", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
-      return days[date.day()];
-    } catch {
-      return "";
-    }
-  };
-
-  // Helper: Lấy ngày dạng DD/MM  
-  const getDateDisplay = (dateString) => {
-    try {
-      const date = dayjs(dateString);
-      return date.format("DD/MM");
-    } catch {
-      return dateString;
-    }
-  };
-
-  // Helper: Chuyển participant IDs/data thành tên - limited display
-  const getParticipantNames = (participantsData) => {
-    if (!participantsData) {
-      return "";
-    }
-
-    let ids = [];
-    
-    // Try to parse if it's a string
-    if (typeof participantsData === 'string') {
-      try {
-        if (participantsData.startsWith('[')) {
-          ids = JSON.parse(participantsData);
-        } else {
-          // Old format: plain text - limit length
-          return participantsData.length > 50 ? participantsData.substring(0, 50) + '...' : participantsData;
-        }
-      } catch (e) {
-        // If parsing fails, it's plain text - limit length
-        return participantsData.length > 50 ? participantsData.substring(0, 50) + '...' : participantsData;
-      }
-    } else if (Array.isArray(participantsData)) {
-      ids = participantsData;
-    } else {
-      return String(participantsData);
-    }
-
-    // Convert IDs to names using lookup - show max 3 names
-    const names = ids
-      .slice(0, 3)
-      .map(id => userLookup[id]?.full_name)
-      .filter(Boolean);
-
-    const displayText = names.join(", ");
-    // Limit to 40 characters with ellipsis
-    return displayText.length > 40 ? displayText.substring(0, 40) + '...' : displayText;
-  };
+  const getParticipantNames = (item) =>
+    item.participantNames || (item.participantIds || []).map((id) => userLookup[id]?.full_name).filter(Boolean).join(", ");
 
   return (
-    <div className="animate-fade-in bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-      <style>
-        {`
-          @media print {
-            body * {
-              visibility: hidden;
-            }
-            #printable-area-weekly, #printable-area-weekly * {
-              visibility: visible;
-            }
-            #printable-area-weekly {
-              position: absolute;
-              left: 0;
-              top: 0;
-              width: 100%;
-              background: white;
-              padding: 20px;
-            }
-            .no-print {
-              display: none !important;
-            }
-            table { border-collapse: collapse !important; width: 100%; }
-            th, td { border: 1px solid #000 !important; color: #000 !important; }
-            .shadow-sm { box-shadow: none !important; border: none !important; }
-          }
-        `}
-      </style>
-
-      <div id="printable-area-weekly">
-        <div className="p-6 border-b border-slate-100 flex flex-col gap-4 no-print">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-end">
-            <div className="lg:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Chọn lịch công tác tuần</label>
-              <select
-                value={activeScheduleId || ""}
-                onChange={(e) => setSelectedScheduleId(e.target.value ? Number(e.target.value) : null)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:border-blue-500"
-                disabled={loading || importLoading}
-              >
-                <option value="">-- Chọn lịch --</option>
-                {schedules.map((schedule) => (
-                  <option key={schedule.schedule_id} value={schedule.schedule_id}>
-                    {`Tuần ${schedule.week}/${schedule.year} - ${schedule.status || "draft"}`}
-                  </option>
-                ))}
-              </select>
+    <div data-testid="weekly-schedule-page">
+      <SchedulePageShell
+        minimal
+        actions={
+          <>
+            <div className="flex min-w-[260px] items-center rounded-full border border-slate-200 bg-white px-4 text-sm text-slate-600">
+              <CalendarOutlined className="mr-2" />
+              {selectedSchedule ? `Week ${selectedSchedule.week}/${selectedSchedule.year}` : "No schedule selected"}
             </div>
-
-            <div className="flex gap-2 justify-start lg:justify-end">
-              <button
-                onClick={fetchWeeklySchedules}
-                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium transition-colors"
-                disabled={loading || importLoading}
-                type="button"
-              >
-                Làm mới
-              </button>
-              <button
-                onClick={handleCreateSchedule}
-                className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium transition-colors"
-                disabled={loading || importLoading}
-                type="button"
-              >
-                Tạo lịch mới
-              </button>
-            </div>
-          </div>
-
-          <div className="text-center md:text-left w-full">
-            <h1 className="text-2xl font-bold text-slate-900 uppercase tracking-wide">Công Tác Tuần</h1>
-            <p className="text-slate-500 font-medium mt-1">
-              Tuần {displayWeek} - Năm {displayYear} {selectedSchedule ? `(Mã lịch: ${selectedSchedule.schedule_id})` : ""}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {canEdit && (
-              !showForm ? (
-                <button
-                  onClick={() => setShowForm(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-medium transition-colors"
-                  disabled={loading || importLoading || !activeScheduleId}
-                  type="button"
-                >
-                  <Plus size={18} /> Thêm công tác
-                </button>
-              ) : (
-                <button
-                  onClick={resetForm}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium transition-colors"
-                  disabled={loading || importLoading}
-                  type="button"
-                >
-                  <X size={18} /> Hủy
-                </button>
-              )
-            )}
-
-            {canEdit && (
-              <>
-                <button
-                  onClick={handleImportClick}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 font-medium transition-colors"
-                  disabled={loading || importLoading || !activeScheduleId}
-                  type="button"
-                >
-                  <Upload size={18} /> {importLoading ? "Đang import..." : "Import Excel/CSV"}
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  accept=".xlsx,.xls,.csv"
-                  onChange={handleImportFile}
-                />
-              </>
-            )}
-
-            <button
-              onClick={() => window.print()}
-              className="flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium transition-colors"
-              type="button"
+            <select
+              value={selectedScheduleId || ""}
+              onChange={(event) => setSelectedScheduleId(event.target.value ? Number(event.target.value) : null)}
+              className="h-11 min-w-[260px] rounded-full border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-slate-900"
             >
-              <Printer size={18} /> In PDF
-            </button>
-          </div>
-        </div>
+              <option value="">-- Chon lich --</option>
+              {schedules.map((schedule) => (
+                <option key={schedule.schedule_id} value={schedule.schedule_id}>
+                  {`Week ${schedule.week}/${schedule.year} - ${schedule.status || "draft"}`}
+                </option>
+              ))}
+            </select>
+            <Button icon={<ReloadOutlined />} onClick={fetchSchedules} className="!h-11 !rounded-full !border-slate-200 !px-5">Refresh</Button>
+            {canEdit ? (
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateSchedule} className="!h-11 !rounded-full !border-0 !bg-slate-950 !px-5 !shadow-none hover:!bg-slate-800">
+                Tao lich moi
+              </Button>
+            ) : null}
+            <Button icon={<DownloadOutlined />} onClick={handleExportPdf} loading={exportLoading} disabled={!selectedSchedule} className="!h-11 !rounded-full !border-slate-200 !px-5">
+              Export PDF
+            </Button>
+          </>
+        }
+      >
+        {error ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</div> : null}
 
-        {error && (
-          <div className="mx-4 mt-4 p-3 bg-red-50 text-red-700 rounded border border-red-200">
-            {error}
-          </div>
-        )}
-
-        {importResult && (
-          <div className="mx-4 mt-4 p-3 bg-emerald-50 text-emerald-800 rounded border border-emerald-200">
-            <p className="font-semibold">Kết quả import</p>
-            <p>
-              Tổng dòng: {importResult.totalRows} | Thành công: {importResult.successCount} | Lỗi: {importResult.failedCount}
-            </p>
-            {Array.isArray(importResult.errors) && importResult.errors.length > 0 && (
-              <ul className="mt-2 list-disc pl-5 text-sm text-amber-800 max-h-40 overflow-y-auto">
-                {importResult.errors.slice(0, 20).map((item, index) => (
-                  <li key={`${item.row}-${item.field}-${index}`}>
-                    Dòng {item.row}: {item.message}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-
-        {loading && (
-          <div className="p-6 text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-200 border-t-blue-600"></div>
-            <p className="mt-2 text-slate-600">Đang xử lý...</p>
-          </div>
-        )}
-
-        {!activeScheduleId && !loading && (
-          <div className="p-8 text-center text-slate-600">
-            <Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p className="mb-4">Chưa có lịch công tác tuần</p>
-            {canEdit && (
-              <p className="text-sm text-slate-500">
-                 Nhấn nút <strong>"Tạo lịch mới"</strong> ở trên để bắt đầu tạo lịch công tác tuần hiện tại
-              </p>
-            )}
-          </div>
-        )}
-
-        {showForm && !loading && canEdit && activeScheduleId && (
-          <div className="m-4 p-4 border border-blue-200 bg-blue-50 rounded-lg">
-            <h3 className="font-bold text-slate-900 mb-4">
-              {editingItemId ? "Chỉnh sửa công tác" : "Thêm công tác mới"}
-            </h3>
-            <form onSubmit={editingItemId ? handleUpdateItem : handleAddItem} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Ngày công tác *</label>
-                  <input
-                    type="date"
-                    value={formData.work_date}
-                    onChange={(e) => setFormData({ ...formData, work_date: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded focus:outline-none focus:border-blue-500"
-                    required
+        {canEdit ? (
+          <div className="grid gap-5 lg:grid-cols-2">
+            <SchedulePanel title="Draft weekly schedules">
+              <div className="space-y-3">
+                {draftSchedules.length ? draftSchedules.map((schedule) => (
+                  <QueueCard
+                    key={schedule.schedule_id}
+                    title={`Week ${schedule.week}/${schedule.year}`}
+                    description={schedule.description || "Weekly work schedule in progress."}
+                    badge={<ScheduleInlineBadge tone="warm">Draft</ScheduleInlineBadge>}
+                    onOpen={() => setSelectedScheduleId(schedule.schedule_id)}
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Giờ công tác *</label>
-                  <select
-                    value={formData.time_period}
-                    onChange={(e) => setFormData({ ...formData, time_period: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded focus:outline-none focus:border-blue-500"
-                    required
-                  >
-                    <option value="Sáng">Sáng</option>
-                    <option value="Chiều">Chiều</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Địa điểm</label>
-                  <input
-                    type="text"
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded focus:outline-none focus:border-blue-500"
-                    placeholder="VD: Phòng họp ABC"
+                )) : <ScheduleEmptyState title="No draft schedules" description="Create a new weekly work schedule to start filling the board." />}
+              </div>
+            </SchedulePanel>
+
+            <SchedulePanel title="Published weekly schedules">
+              <div className="space-y-3">
+                {publishedSchedules.length ? publishedSchedules.map((schedule) => (
+                  <QueueCard
+                    key={schedule.schedule_id}
+                    title={`Week ${schedule.week}/${schedule.year}`}
+                    description={schedule.description || "Published weekly work schedule."}
+                    badge={<ScheduleInlineBadge tone="success">Published</ScheduleInlineBadge>}
+                    onOpen={() => setSelectedScheduleId(schedule.schedule_id)}
                   />
-                </div>
+                )) : <ScheduleEmptyState title="No published schedules" description="Uploaded weekly schedules will appear here once KHTH publishes them." />}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nội dung công tác *</label>
-                <textarea
-                  value={formData.content}
-                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded focus:outline-none focus:border-blue-500 resize-none"
-                  rows="4"
-                  placeholder="Mô tả chi tiết công tác..."
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Người tham dự</label>
-                <UserPicker 
-                  selectedUserIds={formData.participantIds}
-                  onUsersChange={(ids) => setFormData({ ...formData, participantIds: ids })}
-                />
-              </div>*
-              <div className="flex gap-2 justify-end">
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium transition-colors"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 font-medium transition-colors"
-                  disabled={loading}
-                >
-                  <Save size={18} /> {editingItemId ? "Cập nhật" : "Thêm"}
-                </button>
-              </div>
-            </form>
+            </SchedulePanel>
           </div>
-        )}
+        ) : null}
 
-        {!loading && !showForm && activeScheduleId && (
-          <div className="overflow-x-auto p-4" id="printable-content">
-            {items.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">
-                <Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>Chưa có công tác nào được ghi. {canEdit && "Hãy thêm công tác mới hoặc import từ file."}</p>
-              </div>
-            ) : (
-              <table className="w-full border-collapse border border-slate-400 text-sm print:text-xs">
-                <thead>
-                  <tr className="bg-slate-100 print:bg-gray-200">
-                    <th className="border border-slate-400 px-3 py-2 text-center font-bold w-20 print:w-16">
-                      THỨ<br />NGÀY
-                    </th>
-                    <th className="border border-slate-400 px-3 py-2 text-center font-bold">SÁNG</th>
-                    <th className="border border-slate-400 px-3 py-2 text-center font-bold">CHIỀU</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.keys(itemsByDateAndPeriod)
-                    .sort()
-                    .map((date) => (
-                      <tr key={date} className="hover:bg-slate-50 print:hover:bg-white">
-                        <td className="border border-slate-400 px-3 py-2 text-center font-bold align-top bg-slate-50 print:bg-white">
-                          <div className="text-xs">{getDayOfWeek(date)}</div>
-                          <div className="font-bold text-sm">{getDateDisplay(date)}</div>
-                        </td>
-                        {/* SÁNG column */}
-                        <td className="border border-slate-400 px-3 py-2 align-top min-h-24">
-                          <div className="space-y-2">
-                            {itemsByDateAndPeriod[date]['Sáng'].map((item) => (
-                              <div
-                                key={item.weekly_work_item_id}
-                                className="p-2 bg-white border border-slate-200 rounded group hover:border-blue-300 text-xs"
-                              >
-                                <p className="text-slate-700 font-medium whitespace-normal break-words">
-                                  {item.content}
-                                </p>
-                                {item.location && (
-                                  <p className="text-xs text-slate-500 mt-1">📍 {item.location}</p>
-                                )}
-                                {item.participantIds && item.participantIds.length > 0 && (
-                                  <p className="text-xs text-slate-500 mt-1 break-words line-clamp-2">👥 {getParticipantNames(item.participantIds)}</p>
-                                )}
-                                {canEdit && (
-                                  <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                      onClick={() => handleEditStart(item.weekly_work_item_id)}
-                                      className="p-0.5 text-blue-600 hover:bg-blue-50 rounded"
-                                      title="Chỉnh sửa"
-                                      type="button"
-                                    >
-                                      <Edit size={12} />
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteItem(item.weekly_work_item_id)}
-                                      className="p-0.5 text-red-600 hover:bg-red-50 rounded"
-                                      title="Xóa"
-                                      type="button"
-                                    >
-                                      <Trash2 size={12} />
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                        
-                        {/* CHIỀU column */}
-                        <td className="border border-slate-400 px-3 py-2 align-top min-h-24">
-                          <div className="space-y-2">
-                            {itemsByDateAndPeriod[date]['Chiều'].map((item) => (
-                              <div
-                                key={item.weekly_work_item_id}
-                                className="p-2 bg-white border border-slate-200 rounded group hover:border-amber-300 text-xs"
-                              >
-                                <p className="text-slate-700 font-medium whitespace-normal break-words">
-                                  {item.content}
-                                </p>
-                                {item.location && (
-                                  <p className="text-xs text-slate-500 mt-1">📍 {item.location}</p>
-                                )}
-                                {item.participantIds && item.participantIds.length > 0 && (
-                                  <p className="text-xs text-slate-500 mt-1 break-words line-clamp-2">👥 {getParticipantNames(item.participantIds)}</p>
-                                )}
-                                {canEdit && (
-                                  <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                      onClick={() => handleEditStart(item.weekly_work_item_id)}
-                                      className="p-0.5 text-blue-600 hover:bg-blue-50 rounded"
-                                      title="Chỉnh sửa"
-                                      type="button"
-                                    >
-                                      <Edit size={12} />
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteItem(item.weekly_work_item_id)}
-                                      className="p-0.5 text-red-600 hover:bg-red-50 rounded"
-                                      title="Xóa"
-                                      type="button"
-                                    >
-                                      <Trash2 size={12} />
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-
-        <div className="p-8 bg-white mt-4">
-          <div className="flex justify-end gap-16">
-            <div className="text-center">
-              <p className="font-bold text-slate-900 uppercase mb-16">Giám Đốc</p>
-              <p className="font-bold text-slate-900">Thái Khắc Huy</p>
+        <SchedulePanel
+          title="Weekly work workspace"
+          actions={selectedSchedule ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <ScheduleInlineBadge tone={selectedSchedule.status === "approved" ? "success" : "warm"}>
+                {selectedSchedule.status === "approved" ? "Published" : "Draft"}
+              </ScheduleInlineBadge>
+              {canEdit ? (
+                <>
+                  {!showForm ? (
+                    <Button icon={<PlusOutlined />} onClick={() => setShowForm(true)} className="!h-9 !rounded-full !border-slate-200 !px-4">Them cong tac</Button>
+                  ) : (
+                    <Button onClick={resetForm} className="!h-9 !rounded-full !border-slate-200 !px-4">Huy</Button>
+                  )}
+                  <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()} loading={importLoading} className="!h-9 !rounded-full !border-slate-200 !px-4">Import</Button>
+                  <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={handleImport} />
+                  {selectedSchedule.status === "draft" ? (
+                    <Button type="primary" onClick={handlePublish} loading={publishLoading} className="!h-9 !rounded-full !border-0 !bg-slate-950 !px-4 !shadow-none hover:!bg-slate-800">Upload weekly schedule</Button>
+                  ) : null}
+                  <Button danger icon={<DeleteOutlined />} onClick={handleDeleteWeeklySchedule} loading={deleteScheduleLoading} className="!h-9 !rounded-full !px-4">Xoa lich</Button>
+                </>
+              ) : null}
             </div>
-          </div>
-        </div>
-      </div>
+          ) : null}
+        >
+          {loading ? (
+            <div className="flex justify-center py-20"><Spin size="large" /></div>
+          ) : !selectedSchedule ? (
+            <ScheduleEmptyState title="No weekly schedule selected" description="Open or create a weekly work schedule to continue." />
+          ) : (
+            <div className="space-y-6">
+              {showForm && canEdit ? (
+                <form onSubmit={handleSaveItem} className="rounded-3xl border border-slate-200 bg-[#f7f6f3] p-5">
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <input type="date" value={formData.work_date} onChange={(event) => setFormData({ ...formData, work_date: event.target.value })} className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-slate-900" required />
+                    <select value={formData.time_period} onChange={(event) => setFormData({ ...formData, time_period: event.target.value })} className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-slate-900">
+                      <option value="Sáng">Sáng</option>
+                      <option value="Chiều">Chiều</option>
+                    </select>
+                    <input type="text" value={formData.location} onChange={(event) => setFormData({ ...formData, location: event.target.value })} className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-slate-900" placeholder="Dia diem" />
+                  </div>
+                  <textarea value={formData.content} onChange={(event) => setFormData({ ...formData, content: event.target.value })} className="mt-4 min-h-[120px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-900" required />
+                  <div className="mt-4">
+                    <UserPicker selectedUserIds={formData.participantIds} onUsersChange={(ids) => setFormData({ ...formData, participantIds: ids })} />
+                  </div>
+                  <div className="mt-5 flex justify-end gap-2">
+                    <Button onClick={resetForm} className="!h-10 !rounded-full !border-slate-200 !px-4">Huy</Button>
+                    <Button htmlType="submit" type="primary" className="!h-10 !rounded-full !border-0 !bg-slate-950 !px-4 !shadow-none hover:!bg-slate-800">{editingItemId ? "Cap nhat" : "Them"}</Button>
+                  </div>
+                </form>
+              ) : null}
+
+              {scheduleMatrix.length ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-[1080px] w-full border-separate border-spacing-0">
+                    <thead>
+                      <tr>
+                        <th className="sticky left-0 z-20 w-[220px] rounded-l-3xl border border-slate-200 bg-[#f7f6f3] px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Thu ngay</th>
+                        {PERIOD_COLUMNS.map((column, index) => (
+                          <th key={column.key} className={`border-y border-r border-slate-200 bg-[#f7f6f3] px-4 py-4 text-left text-sm font-semibold text-slate-700 ${index === PERIOD_COLUMNS.length - 1 ? "rounded-r-3xl" : ""}`}>
+                            {column.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scheduleMatrix.map((row) => (
+                        <tr key={row.date}>
+                          <td className="sticky left-0 z-10 border-x border-b border-slate-200 bg-white px-4 py-5 align-top">
+                            <p className="text-sm font-semibold text-slate-900">{getDayLabel(row.date)}</p>
+                            <p className="mt-1 text-xs text-slate-500">{getDateLabel(row.date)}</p>
+                          </td>
+                          {PERIOD_COLUMNS.map((column) => (
+                            <td key={`${row.date}-${column.key}`} className="border-r border-b border-slate-200 bg-white px-3 py-3 align-top">
+                              {(row[column.key] || []).length ? (
+                                <div className="space-y-3">
+                                  {row[column.key].map((item) => (
+                                    <WeeklyItemCard
+                                      key={item.weekly_work_item_id}
+                                      item={item}
+                                      participantLabel={getParticipantNames(item)}
+                                      canEdit={canEdit && selectedSchedule.status !== "approved"}
+                                      onEdit={handleEditStart}
+                                      onDelete={handleDeleteItem}
+                                    />
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-slate-300">Khong co cong tac</p>
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <ScheduleEmptyState title="No weekly work items yet" description="Add a work item manually or import from a file to start populating the weekly board." />
+              )}
+            </div>
+          )}
+        </SchedulePanel>
+      </SchedulePageShell>
     </div>
   );
-};
-
-export default WeeklySchedule;
+}

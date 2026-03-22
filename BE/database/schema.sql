@@ -2,6 +2,7 @@
 -- MySQL Database Script
 
 -- Drop tables if exist (in reverse order of dependencies)
+DROP TABLE IF EXISTS WEEKLY_WORK_ASSIGNMENT;
 DROP TABLE IF EXISTS WEEKLY_WORK_ITEM;
 DROP TABLE IF EXISTS SHIFT_ASSIGNMENT;
 DROP TABLE IF EXISTS SHIFT;
@@ -139,9 +140,11 @@ CREATE TABLE SCHEDULE (
     FOREIGN KEY (owner_department_id) REFERENCES DEPARTMENT(department_id) ON DELETE SET NULL,
     INDEX idx_schedule_type (schedule_type),
     INDEX idx_week_year (week, year),
-    INDEX idx_week_year_type (week, year, schedule_type),
     INDEX idx_status (status),
     INDEX idx_department_id (department_id),
+    INDEX created_by (created_by),
+    INDEX source_department_id (source_department_id),
+    INDEX owner_department_id (owner_department_id),
     UNIQUE KEY unique_schedule (schedule_type, department_id, week, year)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -158,6 +161,7 @@ CREATE TABLE SHIFT (
     max_staff INT DEFAULT 10,
     FOREIGN KEY (schedule_id) REFERENCES SCHEDULE(schedule_id) ON DELETE CASCADE,
     FOREIGN KEY (department_id) REFERENCES DEPARTMENT(department_id) ON DELETE CASCADE,
+    INDEX department_id (department_id),
     INDEX idx_schedule_id (schedule_id),
     INDEX idx_shift_date (shift_date),
     INDEX idx_shift_type (shift_type)
@@ -183,14 +187,26 @@ CREATE TABLE WEEKLY_WORK_ITEM (
     weekly_work_item_id INT AUTO_INCREMENT PRIMARY KEY,
     schedule_id         INT          NOT NULL,
     work_date           DATE         NOT NULL,
+    time_period         ENUM('Sáng', 'Chiều') NOT NULL DEFAULT 'Sáng',
     content             TEXT         NOT NULL,
     location            VARCHAR(500) DEFAULT NULL,
-    participants        TEXT         DEFAULT NULL,
     created_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (schedule_id) REFERENCES SCHEDULE(schedule_id) ON DELETE CASCADE,
     INDEX idx_wwi_schedule_id (schedule_id),
     INDEX idx_wwi_work_date   (work_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE WEEKLY_WORK_ASSIGNMENT (
+    weekly_work_assignment_id INT AUTO_INCREMENT PRIMARY KEY,
+    weekly_work_item_id       INT       NOT NULL,
+    user_id                   INT       NOT NULL,
+    assigned_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (weekly_work_item_id) REFERENCES WEEKLY_WORK_ITEM(weekly_work_item_id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES USER(user_id) ON DELETE CASCADE,
+    UNIQUE KEY uk_wwa_item_user (weekly_work_item_id, user_id),
+    INDEX idx_wwa_item_id (weekly_work_item_id),
+    INDEX idx_wwa_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Insert default roles

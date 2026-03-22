@@ -1,17 +1,11 @@
 const Shift = require('../models/Shift');
 const Schedule = require('../models/Schedule');
 const ShiftAssignment = require('../models/ShiftAssignment');
+const SchedulePermissionService = require('../services/SchedulePermissionService');
 
 const canMutateShiftSchedule = (schedule, user) => {
   if (!schedule || !user) return false;
-
-  const isAdmin = (user.roles || []).some((role) => role.role_code === 'ADMIN');
-  if (isAdmin) return true;
-
-  return (
-    schedule.status === 'draft' &&
-    Number(schedule.source_department_id) === Number(user.department_id)
-  );
+  return SchedulePermissionService.canUpdate(user, schedule);
 };
 
 /**

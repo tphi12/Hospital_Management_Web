@@ -65,15 +65,20 @@ async function getMigrationFiles() {
 async function executeMigration(connection, migrationFile) {
   const filePath = path.join(__dirname, 'migrations', migrationFile);
   const sql = await fs.readFile(filePath, 'utf8');
-  
-  // Split by semicolon and filter out empty statements
-  const statements = sql
+
+  // Remove line comments before splitting into statements.
+  const normalizedSql = sql
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*--.*$/, ''))
+    .join('\n');
+
+  const statements = normalizedSql
     .split(';')
     .map(stmt => stmt.trim())
-    .filter(stmt => stmt.length > 0 && !stmt.startsWith('--'));
-  
+    .filter(stmt => stmt.length > 0);
+
   console.log(`  Executing ${statements.length} statements...`);
-  
+
   for (const statement of statements) {
     await connection.query(statement);
   }
@@ -91,9 +96,11 @@ async function runMigrations() {
     // Create connection
     connection = await mysql.createConnection({
       host: config.dbConfig.host,
+      port: config.dbConfig.port,
       user: config.dbConfig.user,
       password: config.dbConfig.password,
       database: config.dbConfig.database,
+      ssl: config.dbConfig.ssl,
       multipleStatements: true
     });
     
@@ -159,9 +166,11 @@ async function showStatus() {
   try {
     connection = await mysql.createConnection({
       host: config.dbConfig.host,
+      port: config.dbConfig.port,
       user: config.dbConfig.user,
       password: config.dbConfig.password,
-      database: config.dbConfig.database
+      database: config.dbConfig.database,
+      ssl: config.dbConfig.ssl,
     });
     
     await initMigrationTable(connection);

@@ -5,29 +5,34 @@ const WeeklyWorkItem = require('../models/WeeklyWorkItem');
 const Department = require('../models/Department');
 const ScheduleService = require('../services/ScheduleService');
 const SchedulePdfService = require('../services/SchedulePdfService');
+const SchedulePermissionService = require('../services/SchedulePermissionService');
 const { pool } = require('../config/database');
 const XLSX = require('xlsx');
 
 const hasRoleCode = (user, roleCode) =>
   (user?.roles || []).some((role) => role?.role_code === roleCode);
 
-const canViewSchedule = (user, schedule) => {
-  if (!user || !schedule) return false;
-  if (hasRoleCode(user, 'ADMIN')) return true;
+const createScheduleShifts = async (scheduleId, departmentId, shifts = []) => {
+  for (const shift of shifts) {
+    const shiftId = await ScheduleService.addShift({
+      scheduleId,
+      departmentId,
+      shiftDate: shift.shift_date,
+      shiftType: shift.shift_type,
+      startTime: shift.start_time,
+      endTime: shift.end_time,
+      maxStaff: shift.max_staff,
+      note: shift.note
+    });
 
-  const userDepartmentId = Number(user.department_id);
-  const sourceDepartmentId = Number(schedule.source_department_id);
-  const ownerDepartmentId = Number(schedule.owner_department_id);
-
-  if (userDepartmentId === sourceDepartmentId) {
-    return true;
+    for (const staffId of shift.staff_ids || []) {
+      await ScheduleService.assignUserToShift({
+        shiftId,
+        userId: staffId,
+        note: shift.note
+      });
+    }
   }
-
-  if (userDepartmentId === ownerDepartmentId) {
-    return schedule.status === 'submitted' || schedule.status === 'approved';
-  }
-
-  return schedule.status === 'approved';
 };
 
 /**
@@ -71,7 +76,7 @@ const getAllSchedules = async (req, res) => {
     };
     
     const schedules = await Schedule.findAll(filters);
-    const visibleSchedules = schedules.filter((schedule) => canViewSchedule(req.user, schedule));
+    const visibleSchedules = schedules.filter((schedule) => SchedulePermissionService.canView(req.user, schedule));
 
     const schedulesWithDetails = await Promise.all(
       visibleSchedules.map(async (schedule) => {
@@ -131,7 +136,7 @@ const getScheduleById = async (req, res) => {
       });
     }
 
-    if (!canViewSchedule(req.user, schedule)) {
+    if (!SchedulePermissionService.canView(req.user, schedule)) {
       return res.status(403).json({
         success: false,
         message: 'Bạn không có quyền xem lịch này'
@@ -214,147 +219,64 @@ const getScheduleById = async (req, res) => {
 const createSchedule = async (req, res) => {
   try {
     const { schedule_type, week, year, description, shifts } = req.body;
-    
+
     if (!schedule_type || !week || !year) {
       return res.status(400).json({
         success: false,
-        message: 'Vui lòng nhập đầy đủ thông tin'
+        message: 'Vui l??ng nh???p ?????y ????? th??ng tin'
       });
     }
-    
-    // Duty schedule flow is handled by service to avoid duplicate business logic
+
+    let scheduleId;
     if (schedule_type === 'duty') {
-      const scheduleId = await ScheduleService.createDutySchedule({
+      scheduleId = await ScheduleService.createDutySchedule({
         userId: req.user.userId,
         departmentId: req.user.department_id,
         week,
         year,
         description
       });
-
-      if (shifts && shifts.length > 0) {
-        for (const shift of shifts) {
-          const shiftId = await ScheduleService.addShift({
-            scheduleId,
-            departmentId: req.user.department_id,
-            shiftDate: shift.shift_date,
-            shiftType: shift.shift_type,
-            startTime: shift.start_time,
-            endTime: shift.end_time,
-            maxStaff: shift.max_staff,
-            note: shift.note
-          });
-
-          if (shift.staff_ids && shift.staff_ids.length > 0) {
-            for (const staffId of shift.staff_ids) {
-              await ScheduleService.assignUserToShift({
-                shiftId,
-                userId: staffId,
-                note: shift.note
-              });
-            }
-          }
-        }
-      }
-
-      return res.status(201).json({
-        success: true,
-        message: 'Tạo lịch thành công',
-        data: { scheduleId }
+    } else if (schedule_type === 'weekly_work') {
+      scheduleId = await ScheduleService.createWeeklySchedule({
+        userId: req.user.userId,
+        week,
+        year,
+        description
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Lo???i l???ch kh??ng h???p l???'
       });
     }
-    
-    // For duty schedule: department clerk creates for their department
-    // For weekly_work: only KHTH can create
-    let sourceDeptId = req.user.department_id;
-    let ownerDeptId = null;
-    
-    if (schedule_type === 'duty') {
-      // Duty schedule: source = user's department, owner = KHTH
-      const [khthDept] = await pool.execute(
-        "SELECT department_id FROM DEPARTMENT WHERE department_type = 'special' LIMIT 1"
-      );
-      
-      if (khthDept.length > 0) {
-        ownerDeptId = khthDept[0].department_id;
-      }
-    } else {
-      // Weekly work: only KHTH can create, both source and owner are KHTH
-      const [userDept] = await pool.execute(
-        "SELECT department_type FROM DEPARTMENT WHERE department_id = ?",
-        [req.user.department_id]
-      );
-      
-      if (!userDept.length || userDept[0].department_type !== 'special') {
-        return res.status(403).json({
-          success: false,
-          message: 'Chỉ phòng KHTH mới có quyền tạo lịch công tác tuần'
-        });
-      }
-      
-      ownerDeptId = req.user.department_id;
-    }
-    
-    // Create schedule
-    const scheduleId = await Schedule.create({
-      schedule_type,
-      department_id: req.user.department_id,
-      week,
-      year,
-      description,
-      created_by: req.user.userId,
-      source_department_id: sourceDeptId,
-      owner_department_id: ownerDeptId,
-      status: 'draft'
-    });
-    
-    // Create shifts if provided
-    if (shifts && shifts.length > 0) {
-      for (const shift of shifts) {
-        const shiftId = await Shift.create({
-          schedule_id: scheduleId,
-          department_id: req.user.department_id,
-          shift_date: shift.shift_date,
-          shift_type: shift.shift_type,
-          note: shift.note,
-          start_time: shift.start_time,
-          end_time: shift.end_time,
-          max_staff: shift.max_staff
-        });
-        
-        // Assign staff if provided
-        if (shift.staff_ids && shift.staff_ids.length > 0) {
-          for (const staffId of shift.staff_ids) {
-            await ShiftAssignment.create({
-              shift_id: shiftId,
-              user_id: staffId,
-              status: 'assigned',
-              note: null
-            });
-          }
-        }
-      }
-    }
-    
+
+    await createScheduleShifts(scheduleId, req.user.department_id, shifts || []);
+
     res.status(201).json({
       success: true,
-      message: 'Tạo lịch thành công',
+      message: 'T???o l???ch th??nh c??ng',
       data: { scheduleId }
     });
   } catch (error) {
     console.error('Create schedule error:', error);
-    
-    // Handle duplicate schedule error
+
     if (error.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({
         success: false,
-        message: 'Lịch công tác cho tuần này đã tồn tại. Vui lòng chọn từ danh sách lịch hiện có.'
+        message: 'L???ch c??ng t??c cho tu???n n??y ???? t???n t???i. Vui l??ng ch???n t??? danh s??ch l???ch hi???n c??.'
       });
     }
-    
+
+    if (error.message === 'Only KHTH STAFF or MANAGER can create weekly work schedules') {
+      return res.status(403).json({
+        success: false,
+        message: 'Chi nhan vien hoac truong phong KHTH moi co quyen tao lich cong tac tuan'
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: 'Lỗi tạo lịch',
+      message: 'L???i t???o l???ch',
       error: error.message
     });
   }
@@ -545,16 +467,7 @@ const deleteSchedule = async (req, res) => {
       });
     }
 
-    // Check permission
-    const userRoles = req.user.roles || [];
-    const isAdmin = userRoles.some(r => r.role_code === 'ADMIN');
-    const isSourceDepartment = Number(schedule.source_department_id) === Number(req.user.department_id);
-    const isKHTH = schedule.owner_department_id === req.user.department_id;
-
-    const canDeleteDraft = schedule.status === 'draft' && (isSourceDepartment || isAdmin);
-    const canDeleteApproved = schedule.status === 'approved' && (isKHTH || isAdmin);
-    
-    if (!canDeleteDraft && !canDeleteApproved) {
+    if (!SchedulePermissionService.canDelete(req.user, schedule)) {
       return res.status(403).json({
         success: false,
         message: 'Bạn không có quyền xóa lịch này'
@@ -688,6 +601,13 @@ const exportSchedulePdf = async (req, res) => {
       });
     }
 
+    if (!SchedulePermissionService.canExport(req.user, schedule)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Ban khong co quyen xuat PDF lich nay'
+      });
+    }
+
     let pdfBuffer;
     if (schedule.schedule_type === 'duty') {
       pdfBuffer = await SchedulePdfService.exportDutySchedule(scheduleId);
@@ -762,17 +682,18 @@ const getWeeklyWorkItems = async (req, res) => {
       });
     }
 
+    if (!SchedulePermissionService.canView(req.user, schedule)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Ban khong co quyen xem lich nay'
+      });
+    }
+
     const items = await WeeklyWorkItem.findBySchedule(scheduleId);
-    
-    // Parse participantIds from JSON
-    const parsedItems = items.map(item => ({
-      ...item,
-      participantIds: item.participants ? JSON.parse(item.participants) : []
-    }));
-    
+
     res.json({
       success: true,
-      data: parsedItems
+      data: items
     });
   } catch (error) {
     console.error('Get weekly work items error:', error);
@@ -833,15 +754,24 @@ const getWeeklyWorkItemById = async (req, res) => {
       });
     }
 
-    // Parse participantIds from JSON
-    const responseData = {
-      ...item,
-      participantIds: item.participants ? JSON.parse(item.participants) : []
-    };
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({
+        success: false,
+        message: 'Khong tim thay lich'
+      });
+    }
+
+    if (!SchedulePermissionService.canView(req.user, schedule)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Ban khong co quyen xem lich nay'
+      });
+    }
 
     res.json({
       success: true,
-      data: responseData
+      data: item
     });
   } catch (error) {
     console.error('Get weekly work item error:', error);
@@ -931,11 +861,7 @@ const addWeeklyWorkItem = async (req, res) => {
       });
     }
 
-    // Check permission - only KHTH staff can add items
-    const isKHTH = schedule.owner_department_id === req.user.department_id;
-    const isAdmin = hasRoleCode(req.user, 'ADMIN');
-    
-    if (!isKHTH && !isAdmin) {
+    if (!SchedulePermissionService.canManageWeeklyWork(req.user, schedule)) {
       return res.status(403).json({
         success: false,
         message: 'Chỉ phòng KHTH mới có quyền thêm công tác'
@@ -1059,11 +985,7 @@ const updateWeeklyWorkItem = async (req, res) => {
       });
     }
 
-    // Check permission - only KHTH staff can update items
-    const isKHTH = schedule.owner_department_id === req.user.department_id;
-    const isAdmin = hasRoleCode(req.user, 'ADMIN');
-    
-    if (!isKHTH && !isAdmin) {
+    if (!SchedulePermissionService.canManageWeeklyWork(req.user, schedule)) {
       return res.status(403).json({
         success: false,
         message: 'Chỉ phòng KHTH mới có quyền cập nhật công tác'
@@ -1087,13 +1009,8 @@ const updateWeeklyWorkItem = async (req, res) => {
     if (content !== undefined) updateData.content = content;
     if (location !== undefined) updateData.location = location;
     
-    // Convert participantIds array to JSON string
     if (participantIds !== undefined) {
-      if (Array.isArray(participantIds) && participantIds.length > 0) {
-        updateData.participants = JSON.stringify(participantIds);
-      } else {
-        updateData.participants = null;
-      }
+      updateData.participantIds = Array.isArray(participantIds) ? participantIds : [];
     }
 
     const updated = await WeeklyWorkItem.update(itemId, updateData);
@@ -1175,11 +1092,7 @@ const deleteWeeklyWorkItem = async (req, res) => {
       });
     }
 
-    // Check permission - only KHTH staff can delete items
-    const isKHTH = schedule.owner_department_id === req.user.department_id;
-    const isAdmin = hasRoleCode(req.user, 'ADMIN');
-    
-    if (!isKHTH && !isAdmin) {
+    if (!SchedulePermissionService.canManageWeeklyWork(req.user, schedule)) {
       return res.status(403).json({
         success: false,
         message: 'Chỉ phòng KHTH mới có quyền xóa công tác'
@@ -1363,19 +1276,12 @@ const importWeeklyWorkItems = async (req, res) => {
  */
 const getUserDutySchedules = async (req, res) => {
   try {
-    console.log('=== getUserDutySchedules ===');
-    console.log('User ID:', req.user?.userId);
-    console.log('User:', req.user);
-
     const filters = {
       status: req.query.status,
       from_date: req.query.from_date,
       to_date: req.query.to_date
     };
-
-    console.log('Filters:', filters);
     const shifts = await ShiftAssignment.findByUser(req.user.userId, filters);
-    console.log(`Found ${shifts.length} shift assignments`);
     
     res.json({
       success: true,
@@ -1384,12 +1290,16 @@ const getUserDutySchedules = async (req, res) => {
         shift_id: shift.shift_id,
         user_id: shift.user_id,
         shift_date: shift.shift_date,
-        shift_type: shift.shift_type,
-        start_time: shift.start_time,
-        end_time: shift.end_time,
-        department_name: shift.department_name,
-        department_code: shift.department_code,
-        status: shift.status,
+          shift_type: shift.shift_type,
+          start_time: shift.start_time,
+          end_time: shift.end_time,
+          schedule_id: shift.schedule_id,
+          schedule_status: shift.schedule_status,
+          week: shift.week,
+          year: shift.year,
+          department_name: shift.department_name,
+          department_code: shift.department_code,
+          status: shift.status,
         note: shift.note,
         assigned_at: shift.assigned_at
       }))
@@ -1427,48 +1337,28 @@ const getUserDutySchedules = async (req, res) => {
  */
 const getUserWeeklyWorkItems = async (req, res) => {
   try {
-    console.log('=== getUserWeeklyWorkItems ===');
-    console.log('User ID:', req.user?.userId);
-    console.log('User:', req.user);
-
     const filters = {
       from_date: req.query.from_date,
       to_date: req.query.to_date
     };
-
-    console.log('Filters:', filters);
     const items = await WeeklyWorkItem.findByUser(req.user.userId, filters);
-    console.log(`Found ${items.length} weekly work items`);
     
-    // Parse participants JSON for each item
-    const processedItems = items.map(item => {
-      let participants = [];
-      try {
-        if (item.participants) {
-          participants = typeof item.participants === 'string' 
-            ? JSON.parse(item.participants) 
-            : item.participants;
-        }
-      } catch (e) {
-        console.warn('Failed to parse participants JSON:', item.participants);
-      }
-
-      return {
-        weekly_work_item_id: item.weekly_work_item_id,
-        schedule_id: item.schedule_id,
-        work_date: item.work_date,
-        time_period: item.time_period,
-        content: item.content,
-        location: item.location,
-        participants: Array.isArray(participants) ? participants : [],
-        week: item.week,
-        year: item.year,
-        schedule_status: item.schedule_status,
-        schedule_description: item.schedule_description,
-        created_at: item.created_at,
-        updated_at: item.updated_at
-      };
-    });
+    const processedItems = items.map(item => ({
+      weekly_work_item_id: item.weekly_work_item_id,
+      schedule_id: item.schedule_id,
+      work_date: item.work_date,
+      time_period: item.time_period,
+      content: item.content,
+      location: item.location,
+      participantNames: item.participantNames || null,
+      participantIds: Array.isArray(item.participantIds) ? item.participantIds : [],
+      week: item.week,
+      year: item.year,
+      schedule_status: item.schedule_status,
+      schedule_description: item.schedule_description,
+      created_at: item.created_at,
+      updated_at: item.updated_at
+    }));
 
     res.json({
       success: true,

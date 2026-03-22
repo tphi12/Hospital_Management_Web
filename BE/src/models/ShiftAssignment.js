@@ -77,19 +77,18 @@ class ShiftAssignment {
    * @returns {Promise<Array>} - List of assignments
    */
   static async findByUser(userId, filters = {}) {
-    console.log('[ShiftAssignment.findByUser] userId:', userId, 'type:', typeof userId);
-    console.log('[ShiftAssignment.findByUser] filters:', filters);
-    
     let query = `
       SELECT sa.*, 
              sh.shift_date, sh.shift_type, sh.start_time, sh.end_time,
              d.department_name, d.department_code,
-             sc.schedule_type, sc.week, sc.year
+             sc.schedule_id, sc.schedule_type, sc.status AS schedule_status, sc.week, sc.year
       FROM SHIFT_ASSIGNMENT sa
       JOIN SHIFT sh ON sa.shift_id = sh.shift_id
       JOIN SCHEDULE sc ON sh.schedule_id = sc.schedule_id
       LEFT JOIN DEPARTMENT d ON sh.department_id = d.department_id
       WHERE sa.user_id = ?
+        AND sc.schedule_type = 'duty'
+        AND sc.status = 'approved'
     `;
     
     const params = [userId];
@@ -111,10 +110,7 @@ class ShiftAssignment {
     
     query += ` ORDER BY sh.shift_date DESC, sh.shift_type`;
     
-    console.log('[ShiftAssignment.findByUser] Query:', query);
-    console.log('[ShiftAssignment.findByUser] Params:', params);
     const [rows] = await pool.execute(query, params);
-    console.log('[ShiftAssignment.findByUser] Result count:', rows.length);
     return rows;
   }
 
@@ -293,12 +289,14 @@ class ShiftAssignment {
       `SELECT sa.*, 
               sh.shift_date, sh.shift_type, sh.start_time, sh.end_time,
               d.department_name, d.department_code,
-              sc.schedule_type
+              sc.schedule_id, sc.schedule_type, sc.status AS schedule_status
        FROM SHIFT_ASSIGNMENT sa
        JOIN SHIFT sh ON sa.shift_id = sh.shift_id
        JOIN SCHEDULE sc ON sh.schedule_id = sc.schedule_id
        LEFT JOIN DEPARTMENT d ON sh.department_id = d.department_id
        WHERE sa.user_id = ? AND sc.week = ? AND sc.year = ?
+         AND sc.schedule_type = 'duty'
+         AND sc.status = 'approved'
        ORDER BY sh.shift_date, sh.shift_type`,
       [userId, week, year]
     );

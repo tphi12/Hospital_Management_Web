@@ -5,6 +5,7 @@ const WeeklyWorkItem = require('../models/WeeklyWorkItem');
 const Role = require('../models/Role');
 const Department = require('../models/Department');
 const { ScheduleType, ScheduleStatus } = require('../utils/enums');
+const SchedulePermissionService = require('./SchedulePermissionService');
 
 /**
  * ScheduleService
@@ -281,7 +282,7 @@ class ScheduleService {
       throw new Error('Only draft schedules can be submitted');
     }
 
-    if (user.department_id !== schedule.source_department_id) {
+    if (!SchedulePermissionService.canSubmit(user, schedule)) {
       throw new Error('You do not have permission to submit this schedule');
     }
 
@@ -307,11 +308,16 @@ class ScheduleService {
       throw new Error('Schedule not found');
     }
 
-    if (schedule.status !== ScheduleStatus.SUBMITTED) {
+    const canApproveWeeklyDraft = (
+      schedule.schedule_type === ScheduleType.WEEKLY_WORK &&
+      schedule.status === ScheduleStatus.DRAFT
+    );
+
+    if (schedule.status !== ScheduleStatus.SUBMITTED && !canApproveWeeklyDraft) {
       throw new Error('Only submitted schedules can be approved');
     }
 
-    if (user.department_id !== schedule.owner_department_id) {
+    if (!SchedulePermissionService.canApprove(user, schedule)) {
       throw new Error('You do not have permission to approve this schedule');
     }
 
@@ -338,16 +344,16 @@ class ScheduleService {
       throw new Error('Schedule not found');
     }
 
-    if (schedule.status === ScheduleStatus.SUBMITTED) {
-      throw new Error('Submitted schedules cannot be updated');
-    }
-
-    if (schedule.status === ScheduleStatus.DRAFT) {
-      if (user.department_id !== schedule.source_department_id) {
+    if (!SchedulePermissionService.canUpdate(user, schedule)) {
+      if (schedule.status === ScheduleStatus.DRAFT) {
         throw new Error('Only source department can update draft schedules');
       }
-    } else if (schedule.status === ScheduleStatus.APPROVED) {
-      if (user.department_id !== schedule.owner_department_id) {
+
+      if (schedule.status === ScheduleStatus.SUBMITTED) {
+        throw new Error('Only owner department can update submitted schedules');
+      }
+
+      if (schedule.status === ScheduleStatus.APPROVED) {
         throw new Error('Only owner department can update approved schedules');
       }
     }
@@ -387,12 +393,11 @@ class ScheduleService {
     const khth = await Department.findByCode('KHTH');
     if (!khth) throw new Error('KHTH department not found in system');
 
-    // Allow: MANAGER of KHTH OR any STAFF in KHTH department
     const hasManagerRole = await this.hasRole(userId, 'MANAGER', 'department', khth.department_id);
     const hasStaffRole = await this.hasRole(userId, 'STAFF', 'department', khth.department_id);
-    
+
     if (!hasManagerRole && !hasStaffRole) {
-      throw new Error('Only KHTH MANAGER or KHTH STAFF can create weekly work schedules');
+      throw new Error('Only KHTH STAFF or MANAGER can create weekly work schedules');
     }
 
     // Duplicate check (same week/year for weekly_work)
@@ -438,7 +443,15 @@ class ScheduleService {
    * @returns {Promise<number>} New WeeklyWorkItem ID
    */
   static async addWeeklyWorkItem(data) {
-    const { scheduleId, workDate, timePeriod = 'Sáng', content, location, participantIds } = data;
+    const {
+      scheduleId,
+      workDate,
+      timePeriod = 'Sáng',
+      content,
+      location,
+      participantIds,
+      participants,
+    } = data;
 
     if (!scheduleId) throw new Error('Schedule ID is required');
     if (!workDate)   throw new Error('Work date is required');
@@ -461,10 +474,28 @@ class ScheduleService {
       throw new Error('Work items can only be added to weekly_work schedules');
     }
 
-    // Convert participantIds array to JSON string
-    let participantsJson = null;
-    if (Array.isArray(participantIds) && participantIds.length > 0) {
-      participantsJson = JSON.stringify(participantIds);
+    let normalizedParticipantIds = [];
+
+    if (Array.isArray(participantIds)) {
+      normalizedParticipantIds = participantIds;
+    } else if (typeof participants === 'string' && participants.trim()) {
+      const rawValue = participants.trim();
+
+      if (rawValue.startsWith('[')) {
+        try {
+          const parsed = JSON.parse(rawValue);
+          if (Array.isArray(parsed)) {
+            normalizedParticipantIds = parsed;
+          }
+        } catch (error) {
+          normalizedParticipantIds = [];
+        }
+      } else {
+        normalizedParticipantIds = rawValue
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean);
+      }
     }
 
     const itemId = await WeeklyWorkItem.create({
@@ -473,7 +504,7 @@ class ScheduleService {
       time_period:  timePeriod,
       content,
       location:     location || null,
-      participants: participantsJson
+      participantIds: normalizedParticipantIds
     });
 
     return itemId;
@@ -513,6 +544,25 @@ class ScheduleService {
       const content = String(row.content || '').trim();
       const location = row.location ? String(row.location).trim() : null;
       const participants = row.participants ? String(row.participants).trim() : null;
+      let parsedParticipantIds = [];
+
+      if (participants) {
+        if (participants.startsWith('[')) {
+          try {
+            const parsed = JSON.parse(participants);
+            if (Array.isArray(parsed)) {
+              parsedParticipantIds = parsed;
+            }
+          } catch (error) {
+            parsedParticipantIds = [];
+          }
+        } else {
+          parsedParticipantIds = participants
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean);
+        }
+      }
 
       if (!workDate) {
         errors.push({ row: rowNumber, field: 'work_date', message: 'Thiếu ngày công tác' });
@@ -551,7 +601,7 @@ class ScheduleService {
           time_period: timePeriod,
           content,
           location,
-          participants
+          participantIds: parsedParticipantIds
         });
         successCount += 1;
       } catch (error) {
@@ -595,7 +645,7 @@ class ScheduleService {
       throw new Error('Only submitted schedules can be approved');
     }
 
-    if (user.department_id !== schedule.owner_department_id) {
+    if (!SchedulePermissionService.canApprove(user, schedule)) {
       throw new Error('You do not have permission to approve this schedule');
     }
 

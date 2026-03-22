@@ -61,8 +61,9 @@ export const AuthProvider = ({ children }) => {
         setIsLoading(true);
         try {
             const response = await authService.login(username, password);
-            // authService.login trả về { success, message, data: { token, user } }
-            const { token, user: apiUser } = response?.data || {};
+            // authService.login tr? v? JSON body, kh?ng ph?i raw Axios response
+            const payload = response?.data ? response.data : response;
+            const { token, user: apiUser } = payload?.data ? payload.data : payload || {};
             if (!token || !apiUser) {
                 throw new Error("Thiếu token hoặc user từ server");
             }

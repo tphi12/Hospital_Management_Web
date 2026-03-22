@@ -83,6 +83,7 @@ const Login = () => {
                             prefix={<UserOutlined className="text-slate-400" />}
                             placeholder="Email hoặc Username"
                             className="rounded-lg"
+                            data-testid="login-username"
                         />
                     </Form.Item>
 
@@ -94,6 +95,7 @@ const Login = () => {
                             prefix={<LockOutlined className="text-slate-400" />}
                             placeholder="Mật khẩu"
                             className="rounded-lg"
+                            data-testid="login-password"
                         />
                     </Form.Item>
 
@@ -114,6 +116,7 @@ const Login = () => {
                             className="w-full h-12 text-base font-bold rounded-lg bg-blue-600 hover:bg-blue-700 shadow-md"
                             loading={isLoading}
                             icon={!isLoading && <LoginOutlined />}
+                            data-testid="login-submit"
                         >
                             Đăng nhập
                         </Button>
