@@ -24,7 +24,7 @@ export const UserPicker = ({ selectedUserIds = [], onUsersChange }) => {
         if (response.data.success) {
           setDepartments(response.data.data || []);
         }
-      } catch (error) {
+      } catch {
         // Handle error silently
       }
     };
@@ -58,13 +58,13 @@ export const UserPicker = ({ selectedUserIds = [], onUsersChange }) => {
             return updated;
           });
         }
-      } catch (error) {
+      } catch {
         // Handle error silently
       }
     };
 
     loadSelectedUserData();
-  }, [selectedUserIds]);
+  }, [selectedUserIds, selectedUserCache]);
 
   // Load users when search or department changes
   useEffect(() => {
@@ -81,7 +81,7 @@ export const UserPicker = ({ selectedUserIds = [], onUsersChange }) => {
         if (response.data.success) {
           setUsers(response.data.data || []);
         }
-      } catch (error) {
+      } catch {
         // Handle error silently
       } finally {
         setLoading(false);
@@ -97,7 +97,7 @@ export const UserPicker = ({ selectedUserIds = [], onUsersChange }) => {
     if (Array.isArray(selectedUserIds)) {
       setSelectedUsers(selectedUserIds);
     }
-  }, [selectedUserIds]);
+  }, [selectedUserIds, selectedUserCache]);
 
   // Handle user selection toggle
   const handleUserToggle = (userId, userObj = null) => {

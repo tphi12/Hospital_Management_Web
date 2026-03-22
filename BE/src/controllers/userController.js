@@ -206,14 +206,14 @@ const createUser = async (req, res) => {
       department_id,
       gender,
       date_of_birth
-    });
+    }, connection);
     
     // Assign role if provided
     if (role_id) {
       const roleScope = scope_type || 'department';
       const roleDeptId = roleScope === 'department' ? department_id : null;
       
-      await Role.assignRoleToUser(userId, role_id, roleScope, roleDeptId);
+      await Role.assignRoleToUser(userId, role_id, roleScope, roleDeptId, connection);
     }
     
     await connection.commit();

@@ -6,9 +6,9 @@ CREATE TABLE IF NOT EXISTS WEEKLY_WORK_ITEM (
     weekly_work_item_id INT AUTO_INCREMENT PRIMARY KEY,
     schedule_id         INT          NOT NULL,
     work_date           DATE         NOT NULL,
+    time_period         ENUM('Sáng', 'Chiều') NOT NULL DEFAULT 'Sáng',
     content             TEXT         NOT NULL,
     location            VARCHAR(500) DEFAULT NULL,
-    -- Free-text list of participants (may be a JSON array string or comma-separated names)
     participants        TEXT         DEFAULT NULL,
     created_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

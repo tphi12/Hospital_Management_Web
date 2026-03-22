@@ -17,7 +17,7 @@ import DocumentList from "./pages/documents/DocumentList";
 import { DocumentApprovals } from "./pages/documents/DocumentPages";
 import MySchedule from "./pages/schedule/MySchedule";
 import DutyScheduleClerkPage from "./pages/schedule/DutyScheduleClerkPage";
-import DutyScheduleStaffPage from "./pages/schedule/DutyScheduleStaffPage";
+import DutyScheduleKHTHPage from "./pages/schedule/DutyScheduleKHTHPage";
 import WeeklySchedule from "./pages/schedule/WeeklySchedule";
 import Profile from "./pages/Profile";
 
@@ -133,7 +133,7 @@ function App() {
             <Route
               path="/schedule/department"
               element={
-                <ProtectedRoute allowedRoles={[ROLES.DEPT_CLERK]}>
+                <ProtectedRoute allowedRoles={[ROLES.DEPT_CLERK, ROLES.ADMIN]}>
                   <DutyScheduleClerkPage />
                 </ProtectedRoute>
               }
@@ -142,7 +142,7 @@ function App() {
               path="/schedule/master"
               element={
                 <ProtectedRoute allowedRoles={[ROLES.KHTH, ROLES.ADMIN]}>
-                  <DutyScheduleStaffPage />
+                  <DutyScheduleKHTHPage />
                 </ProtectedRoute>
               }
             />

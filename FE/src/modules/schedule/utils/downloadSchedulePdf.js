@@ -43,7 +43,10 @@ export async function downloadSchedulePdf(schedule) {
   }
 
   // ── Trigger browser download ───────────────────────────────────────────
-  const filename = `Duty_Schedule_Week_${schedule.week}_${schedule.year}.pdf`;
+  const prefix = schedule.schedule_type === 'weekly_work'
+    ? 'Weekly_Work_Schedule'
+    : 'Duty_Schedule';
+  const filename = `${prefix}_Week_${schedule.week}_${schedule.year}.pdf`;
   const url      = URL.createObjectURL(res.data);
 
   const anchor      = document.createElement('a');

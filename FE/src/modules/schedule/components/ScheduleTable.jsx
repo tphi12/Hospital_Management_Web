@@ -1,41 +1,12 @@
-/**
- * ScheduleTable
- *
- * Renders the duty schedule as a fixed-shape HTML table:
- *   rows    → 3 shift types  (morning / afternoon / night)
- *   columns → 7 days         (Mon – Sun of the schedule's week)
- *
- * Props
- * ─────
- *   schedule   {Schedule|null}  – Schedule object including `schedule.shifts[]`
- *   editable   {boolean}        – When true, cells show an "Assign staff" button
- *                                 and clicking an occupied cell opens the assign modal
- *   onAssigned {() => void}     – Optional callback invoked after a successful
- *                                 assignment so the parent can re-fetch / invalidate
- *   staffList  {User[]}         – Optional pre-loaded staff list.
- *                                 If omitted the component fetches by schedule's
- *                                 source_department_id (requires useAuth).
- *
- * Dependencies
- * ────────────
- *   antd v6, dayjs (isoWeek plugin), scheduleApi.assignUserToShift,
- *   userService (for internal staff fetch), useAuth
- */
-
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Badge,
-  Button,
-  Divider,
-  Empty,
   Form,
   Input,
   Modal,
   Select,
-  Table,
   Tag,
-  Tooltip,
   Typography,
+  message as antdMessage,
 } from "antd";
 import {
   ClockCircleOutlined,
@@ -46,137 +17,137 @@ import {
 import PropTypes from "prop-types";
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
+import { weekDays } from "../utils/calendar";
 import { useAuth } from "../../../hooks/useAuth";
 import { assignUserToShift } from "../api/scheduleApi";
 import { userService } from "../../../services";
 
 dayjs.extend(isoWeek);
 
-// ─── Static lookup tables ─────────────────────────────────────────────────────
-
 const SHIFT_TYPES = ["morning", "afternoon", "night"];
 
 const SHIFT_LABELS = {
-  morning:   "Ca Sáng",
-  afternoon: "Ca Chiều",
-  night:     "Ca Đêm",
+  morning: "Ca Sang",
+  afternoon: "Ca Chieu",
+  night: "Ca Dem",
 };
 
-const SHIFT_COLORS = {
-  morning:   "blue",
-  afternoon: "orange",
-  night:     "purple",
+const SHIFT_STYLES = {
+  morning: {
+    chip: "border-blue-200 bg-blue-50 text-blue-700",
+    panel: "border-blue-100 bg-blue-50/60",
+  },
+  afternoon: {
+    chip: "border-amber-200 bg-amber-50 text-amber-700",
+    panel: "border-amber-100 bg-amber-50/60",
+  },
+  night: {
+    chip: "border-violet-200 bg-violet-50 text-violet-700",
+    panel: "border-violet-100 bg-violet-50/60",
+  },
 };
 
-const SHIFT_BG = {
-  morning:   "#e6f4ff",
-  afternoon: "#fff7e6",
-  night:     "#f9f0ff",
-};
+const DAY_NAMES = ["Thu Hai", "Thu Ba", "Thu Tu", "Thu Nam", "Thu Sau", "Thu Bay", "Chu Nhat"];
 
-const DAY_NAMES = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Mon–Sun day objects for a given ISO week / year. */
-function weekDays(week, year) {
-  const monday = dayjs().year(year).isoWeek(week).isoWeekday(1);
-  return Array.from({ length: 7 }, (_, i) => monday.add(i, "day"));
+function normDate(value) {
+  return typeof value === "string" ? value.slice(0, 10) : dayjs(value).format("YYYY-MM-DD");
 }
 
-/** Normalise shift_date to "YYYY-MM-DD" whether it comes as a string or Date. */
-function normDate(d) {
-  return typeof d === "string" ? d.slice(0, 10) : dayjs(d).format("YYYY-MM-DD");
-}
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-/**
- * Content rendered inside a single table cell.
- * Shows all shifts of a given type on that day, plus an "assign" button.
- */
-function CellContent({ shifts, editable, onAssign }) {
-  if (!shifts || shifts.length === 0) {
-    return (
-      <span style={{ color: "#bbb", fontSize: 11 }}>—</span>
-    );
+function ShiftCell({ shifts, editable, onAssign, onEditShift, onDeleteShift }) {
+  if (!shifts.length) {
+    return <p className="text-xs text-slate-300">Khong co ca truc</p>;
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="space-y-2">
       {shifts.map((shift) => {
         const assigned = shift.assignments?.length ?? 0;
-        const full     = assigned >= shift.max_staff;
+        const isFull = assigned >= shift.max_staff;
+        const style = SHIFT_STYLES[shift.shift_type] ?? SHIFT_STYLES.morning;
 
         return (
           <div
             key={shift.shift_id}
-            style={{
-              border:       "1px solid #e8e8e8",
-              borderRadius:  6,
-              padding:       "4px 6px",
-              background:    "#fafafa",
-              cursor:        editable && !full ? "pointer" : "default",
-            }}
-            onClick={editable && !full ? () => onAssign(shift) : undefined}
+            className={`rounded-2xl border px-3 py-3 shadow-sm transition ${style.panel} ${
+              editable && !isFull ? "cursor-pointer hover:border-slate-300" : ""
+            }`}
+            onClick={editable && !isFull ? () => onAssign(shift) : undefined}
           >
-            {/* Time */}
-            <div style={{ fontSize: 11, color: "#555" }}>
-              <ClockCircleOutlined style={{ marginRight: 3 }} />
-              {String(shift.start_time).slice(0, 5)} –{" "}
-              {String(shift.end_time).slice(0, 5)}
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${style.chip}`}>
+                  {SHIFT_LABELS[shift.shift_type] ?? shift.shift_type}
+                </span>
+                <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                  <ClockCircleOutlined />
+                  <span>{String(shift.start_time).slice(0, 5)} - {String(shift.end_time).slice(0, 5)}</span>
+                </div>
+              </div>
+
+              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                {assigned}/{shift.max_staff}
+              </span>
             </div>
 
-            {/* Capacity badge */}
-            <div style={{ fontSize: 11, marginTop: 2 }}>
-              <TeamOutlined style={{ marginRight: 3, color: "#888" }} />
-              <Badge
-                count={`${assigned}/${shift.max_staff}`}
-                style={{
-                  backgroundColor: full ? "#f5222d" : "#52c41a",
-                  fontSize: 10,
-                  lineHeight: "16px",
-                  height: 16,
-                }}
-              />
-            </div>
+            {shift.assignments?.length ? (
+              <div className="mt-3 space-y-1.5 border-t border-white/70 pt-3">
+                {shift.assignments.map((assignment) => (
+                  <div
+                    key={assignment.assignment_id}
+                    className="truncate text-xs text-slate-600"
+                    title={assignment.full_name ?? `#${assignment.user_id}`}
+                  >
+                    {assignment.full_name ?? `#${assignment.user_id}`}
+                  </div>
+                ))}
+              </div>
+            ) : null}
 
-            {/* Assigned staff names */}
-            {shift.assignments && shift.assignments.length > 0 && (
-              <>
-                <Divider dashed style={{ margin: "3px 0" }} />
-                <div className="flex flex-col gap-0.5">
-                  {shift.assignments.map((a) => (
-                    <Typography.Text
-                      key={a.assignment_id}
-                      style={{ fontSize: 10 }}
-                      ellipsis
+            {editable ? (
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/70 pt-3">
+                {!isFull ? (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 transition hover:text-slate-950"
+                    data-testid={`assign-shift-${shift.shift_id}`}
+                  >
+                    <UserAddOutlined />
+                    Phan cong
+                  </button>
+                ) : (
+                  <span className="text-xs text-slate-400">Da du nguoi</span>
+                )}
+
+                <div className="flex items-center gap-2">
+                  {onEditShift ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onEditShift(shift);
+                      }}
+                      className="text-xs font-medium text-slate-500 transition hover:text-slate-900"
+                      data-testid={`edit-shift-${shift.shift_id}`}
                     >
-                      {a.full_name ?? `#${a.user_id}`}
-                    </Typography.Text>
-                  ))}
+                      Sua
+                    </button>
+                  ) : null}
+                  {onDeleteShift ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onDeleteShift(shift);
+                      }}
+                      className="text-xs font-medium text-red-600 transition hover:text-red-700"
+                      data-testid={`delete-shift-${shift.shift_id}`}
+                    >
+                      Xoa
+                    </button>
+                  ) : null}
                 </div>
-              </>
-            )}
-
-            {/* "Assign" quick-action visible only when editable and not full */}
-            {editable && !full && (
-              <Tooltip title="Nhấn để phân công nhân viên">
-                <div
-                  style={{
-                    marginTop:  3,
-                    fontSize:   10,
-                    color:      "#1677ff",
-                    display:    "flex",
-                    alignItems: "center",
-                    gap:        2,
-                  }}
-                >
-                  <UserAddOutlined />
-                  Phân công
-                </div>
-              </Tooltip>
-            )}
+              </div>
+            ) : null}
           </div>
         );
       })}
@@ -184,54 +155,66 @@ function CellContent({ shifts, editable, onAssign }) {
   );
 }
 
-CellContent.propTypes = {
-  shifts:   PropTypes.array,
+ShiftCell.propTypes = {
+  shifts: PropTypes.array.isRequired,
   editable: PropTypes.bool,
   onAssign: PropTypes.func,
+  onEditShift: PropTypes.func,
+  onDeleteShift: PropTypes.func,
 };
-
-// ─── ScheduleTable ────────────────────────────────────────────────────────────
 
 export default function ScheduleTable({
   schedule,
   editable = false,
   onAssigned,
   onAddShift,
+  onEditShift,
+  onDeleteShift,
   staffList: staffListProp,
 }) {
   const { user } = useAuth();
-
-  // ── Staff list ───────────────────────────────────────────────────────────
   const [staffList, setStaffList] = useState(staffListProp ?? []);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [activeShift, setActiveShift] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [assignForm] = Form.useForm();
 
   const fetchStaff = useCallback(async () => {
-    if (staffListProp) return;                    // parent supplied the list
-    const deptId =
-      schedule?.source_department_id ?? user?.departmentId;
+    if (staffListProp) return;
+    const deptId = schedule?.source_department_id ?? user?.departmentId;
     if (!deptId) return;
+
     try {
-      const res  = await userService.getAllUsers({ department_id: deptId });
-      const list = res.data ?? res ?? [];
+      const response = await userService.getAllUsers({ department_id: deptId });
+      const list = response.data ?? response ?? [];
       setStaffList(Array.isArray(list) ? list : []);
     } catch {
-      /* non-critical */
+      setStaffList([]);
     }
-  }, [staffListProp, schedule?.source_department_id, user?.departmentId]);
+  }, [schedule?.source_department_id, staffListProp, user?.departmentId]);
 
   useEffect(() => {
     if (editable) fetchStaff();
   }, [editable, fetchStaff]);
 
-  // Sync if parent passes a fresh list after mount
   useEffect(() => {
     if (staffListProp) setStaffList(staffListProp);
   }, [staffListProp]);
 
-  // ── Assign modal state ───────────────────────────────────────────────────
-  const [modalOpen,   setModalOpen]   = useState(false);
-  const [activeShift, setActiveShift] = useState(null);
-  const [submitting,  setSubmitting]  = useState(false);
-  const [assignForm]  = Form.useForm();
+  const days = useMemo(() => {
+    if (!schedule) return [];
+    return weekDays(schedule.week, schedule.year);
+  }, [schedule]);
+
+  const shiftIndex = useMemo(() => {
+    const index = {};
+    for (const shift of schedule?.shifts ?? []) {
+      const key = `${normDate(shift.shift_date)}::${shift.shift_type}`;
+      if (!index[key]) index[key] = [];
+      index[key].push(shift);
+    }
+    return index;
+  }, [schedule]);
 
   const openAssign = useCallback((shift) => {
     setActiveShift(shift);
@@ -241,284 +224,198 @@ export default function ScheduleTable({
 
   const closeAssign = useCallback(() => {
     setModalOpen(false);
-    assignForm.resetFields();
     setActiveShift(null);
+    assignForm.resetFields();
   }, [assignForm]);
 
   const handleAssign = async () => {
     let values;
-    try { values = await assignForm.validateFields(); }
-    catch { return; }                              // inline validation feedback
+    try {
+      values = await assignForm.validateFields();
+    } catch {
+      return;
+    }
 
     setSubmitting(true);
     try {
-      const res = await assignUserToShift({
+      const response = await assignUserToShift({
         shift_id: activeShift.shift_id,
-        user_id:  values.user_id,
-        note:     values.note,
+        user_id: values.user_id,
+        note: values.note,
       });
-      if (res.success) {
-        const { message: antdMessage } = await import("antd");
-        antdMessage.success("Phân công nhân viên thành công");
-        closeAssign();
-        onAssigned?.();
-      } else {
-        const { message: antdMessage } = await import("antd");
-        antdMessage.error(res.message ?? "Phân công thất bại");
+
+      if (!response.success) {
+        antdMessage.error(response.message ?? "Phan cong that bai");
+        return;
       }
+
+      antdMessage.success("Phan cong nhan vien thanh cong");
+      closeAssign();
+      onAssigned?.();
     } catch {
-      const { message: antdMessage } = await import("antd");
-      antdMessage.error("Lỗi kết nối máy chủ");
+      antdMessage.error("Loi ket noi may chu");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ── Build table data ─────────────────────────────────────────────────────
-
-  /** 7 dayjs objects for the schedule's week */
-  const days = useMemo(() => {
-    if (!schedule) return [];
-    return weekDays(schedule.week, schedule.year);
-  }, [schedule]);
-
-  /** Lookup: (dateStr, shiftType) → Shift[] */
-  const shiftIndex = useMemo(() => {
-    const idx = {};
-    for (const shift of schedule?.shifts ?? []) {
-      const key = `${normDate(shift.shift_date)}::${shift.shift_type}`;
-      if (!idx[key]) idx[key] = [];
-      idx[key].push(shift);
-    }
-    return idx;
-  }, [schedule]);
-
-  // ── Table columns ────────────────────────────────────────────────────────
-
-  const columns = useMemo(() => {
-    const shiftTypeCol = {
-      title:     "Ca / Ngày",
-      dataIndex: "shiftType",
-      width:     106,
-      fixed:     "left",
-      render:    (type) => (
-        <Tag
-          color={SHIFT_COLORS[type]}
-          style={{
-            fontWeight:  600,
-            fontSize:    12,
-            padding:     "2px 8px",
-            margin:       0,
-          }}
-        >
-          {SHIFT_LABELS[type]}
-        </Tag>
-      ),
-      onCell: (row) => ({
-        style: {
-          background:  SHIFT_BG[row.shiftType],
-          textAlign:   "center",
-          verticalAlign: "middle",
-        },
-      }),
-    };
-
-    const dayCols = days.map((day, idx) => {
-      const dateStr = day.format("YYYY-MM-DD");
-      const isToday = day.isSame(dayjs(), "day");
-
-      return {
-        key:   dateStr,
-        width: 150,
-        title: (
-          <div style={{ textAlign: "center", lineHeight: 1.4 }}>
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize:   12,
-                color:      isToday ? "#1677ff" : undefined,
-              }}
-            >
-              {DAY_NAMES[idx]}
-            </div>
-            <div
-              style={{
-                fontSize:  11,
-                color:     isToday ? "#ff4d4f" : "#888",
-                fontWeight: isToday ? 600 : 400,
-              }}
-            >
-              {day.format("DD/MM")}
-            </div>
-            {editable && onAddShift && (
-              <Tooltip title="Thêm ca trực">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<PlusOutlined />}
-                  onClick={(e) => { e.stopPropagation(); onAddShift(dateStr); }}
-                  style={{
-                    color:     "#1677ff",
-                    fontSize:  11,
-                    height:    20,
-                    padding:   "0 4px",
-                    marginTop: 2,
-                  }}
-                />
-              </Tooltip>
-            )}
-          </div>
-        ),
-        onHeaderCell: () => ({
-          style: {
-            background: isToday ? "#e6f4ff" : undefined,
-            borderBottom: isToday ? "2px solid #1677ff" : undefined,
-          },
-        }),
-        onCell: (row) => ({
-          style: {
-            background: isToday
-              ? `${SHIFT_BG[row.shiftType]}cc`   // slight tint for today column
-              : SHIFT_BG[row.shiftType],
-            verticalAlign: "top",
-            padding: "6px 8px",
-          },
-        }),
-        render: (_, row) => {
-          const shifts = shiftIndex[`${dateStr}::${row.shiftType}`] ?? [];
-          return (
-            <CellContent
-              shifts={shifts}
-              editable={editable}
-              onAssign={openAssign}
-            />
-          );
-        },
-      };
-    });
-
-    return [shiftTypeCol, ...dayCols];
-  }, [days, shiftIndex, editable, openAssign, onAddShift]);
-
-  // ── Table rows (one per shift type) ─────────────────────────────────────
-
-  const dataSource = useMemo(
-    () => SHIFT_TYPES.map((type) => ({ key: type, shiftType: type })),
-    [],
-  );
-
-  // ── Empty guard ──────────────────────────────────────────────────────────
-
   if (!schedule) {
     return (
-      <Empty
-        description="Chưa có lịch trực"
-        style={{ padding: "32px 0" }}
-      />
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center">
+        <p className="text-sm font-semibold text-slate-800">Chua co lich truc</p>
+      </div>
     );
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────
-
   return (
     <>
-      <Table
-        dataSource={dataSource}
-        columns={columns}
-        pagination={false}
-        scroll={{ x: "max-content" }}
-        bordered
-        size="small"
-        rowKey="key"
-        style={{ userSelect: "none" }}
-      />
+      <div className="overflow-x-auto">
+        <table className="min-w-[1040px] w-full border-separate border-spacing-0">
+          <thead>
+            <tr>
+              <th className="sticky left-0 z-20 w-[150px] rounded-l-3xl border border-slate-200 bg-[#f7f6f3] px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                Shift
+              </th>
+              {days.map((day, index) => {
+                const dateStr = day.format("YYYY-MM-DD");
+                const isToday = day.isSame(dayjs(), "day");
 
-      {/* ── Assign staff modal ───────────────────────────────────── */}
+                return (
+                  <th
+                    key={dateStr}
+                    className={`border-y border-r border-slate-200 bg-[#f7f6f3] px-4 py-4 text-left align-top ${
+                      index === days.length - 1 ? "rounded-r-3xl" : ""
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className={`text-sm font-semibold ${isToday ? "text-slate-950" : "text-slate-700"}`}>
+                          {DAY_NAMES[index]}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">{day.format("DD/MM/YYYY")}</p>
+                      </div>
+
+                      {editable && onAddShift ? (
+                        <button
+                          type="button"
+                          onClick={() => onAddShift(dateStr)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-950"
+                          data-testid={`add-shift-${dateStr}`}
+                        >
+                          <PlusOutlined />
+                        </button>
+                      ) : null}
+                    </div>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+
+          <tbody>
+            {SHIFT_TYPES.map((shiftType) => (
+              <tr key={shiftType}>
+                <td className="sticky left-0 z-10 border-x border-b border-slate-200 bg-white px-4 py-5 align-top">
+                  <div className="space-y-2">
+                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                      (SHIFT_STYLES[shiftType] ?? SHIFT_STYLES.morning).chip
+                    }`}>
+                      {SHIFT_LABELS[shiftType] ?? shiftType}
+                    </span>
+                    <p className="text-xs text-slate-500">View, assign, and adjust staffing for this shift block.</p>
+                  </div>
+                </td>
+
+                {days.map((day) => {
+                  const dateStr = day.format("YYYY-MM-DD");
+                  const shifts = shiftIndex[`${dateStr}::${shiftType}`] ?? [];
+
+                  return (
+                    <td key={`${dateStr}-${shiftType}`} className="border-r border-b border-slate-200 bg-white px-3 py-3 align-top">
+                      <ShiftCell
+                        shifts={shifts}
+                        editable={editable}
+                        onAssign={openAssign}
+                        onEditShift={onEditShift}
+                        onDeleteShift={onDeleteShift}
+                      />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
       <Modal
         title={
           activeShift
-            ? `Phân công nhân viên — ${SHIFT_LABELS[activeShift.shift_type] ?? activeShift.shift_type} · ${
-                activeShift.shift_date
-                  ? dayjs(normDate(activeShift.shift_date)).format("DD/MM/YYYY")
-                  : ""
-              }`
-            : "Phân công nhân viên"
+            ? `Phan cong nhan vien - ${SHIFT_LABELS[activeShift.shift_type] ?? activeShift.shift_type}`
+            : "Phan cong nhan vien"
         }
         open={modalOpen}
         onCancel={closeAssign}
         onOk={handleAssign}
-        okText="Phân công"
-        cancelText="Huỷ"
+        okText="Phan cong"
+        cancelText="Huy"
         confirmLoading={submitting}
         destroyOnClose
       >
-        {/* Shift summary banner */}
-        {activeShift && (
-          <div
-            style={{
-              marginBottom: 12,
-              padding:      "8px 12px",
-              borderRadius:  6,
-              background:   SHIFT_BG[activeShift.shift_type],
-              border:       "1px solid #e8e8e8",
-            }}
-          >
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              <ClockCircleOutlined style={{ marginRight: 4 }} />
-              {String(activeShift.start_time).slice(0, 5)} –{" "}
-              {String(activeShift.end_time).slice(0, 5)}
-              {"   ·   "}
-              <TeamOutlined style={{ marginRight: 4 }} />
-              Đã phân công:{" "}
-              <strong>
-                {activeShift.assignments?.length ?? 0} /{" "}
-                {activeShift.max_staff}
-              </strong>{" "}
-              người
-            </Typography.Text>
+        {activeShift ? (
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+              <span className="inline-flex items-center gap-2">
+                <ClockCircleOutlined />
+                {String(activeShift.start_time).slice(0, 5)} - {String(activeShift.end_time).slice(0, 5)}
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <TeamOutlined />
+                {activeShift.assignments?.length ?? 0}/{activeShift.max_staff} nguoi
+              </span>
+            </div>
 
-            {/* Already-assigned staff list */}
-            {activeShift.assignments && activeShift.assignments.length > 0 && (
-              <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4 }}>
-                {activeShift.assignments.map((a) => (
-                  <Tag key={a.assignment_id} style={{ fontSize: 11 }}>
-                    {a.full_name ?? `#${a.user_id}`}
+            {activeShift.assignments?.length ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {activeShift.assignments.map((assignment) => (
+                  <Tag key={assignment.assignment_id}>
+                    {assignment.full_name ?? `#${assignment.user_id}`}
                   </Tag>
                 ))}
               </div>
-            )}
+            ) : null}
           </div>
-        )}
+        ) : null}
 
         <Form form={assignForm} layout="vertical">
           <Form.Item
             name="user_id"
-            label="Chọn nhân viên"
-            rules={[{ required: true, message: "Vui lòng chọn nhân viên" }]}
+            label="Chon nhan vien"
+            rules={[{ required: true, message: "Vui long chon nhan vien" }]}
           >
             <Select
               showSearch
-              placeholder="Tìm theo tên hoặc mã nhân viên..."
+              placeholder="Tim theo ten hoac ma nhan vien"
               optionFilterProp="label"
-              options={staffList.map((s) => {
-                const id           = s.user_id ?? s.id;
-                const alreadyIn    = activeShift?.assignments?.some(
-                  (a) => a.user_id === id,
-                );
-                const label        =
-                  (s.full_name ?? s.username ?? `User #${id}`) +
-                  (s.employee_code ? ` (${s.employee_code})` : "") +
-                  (alreadyIn ? " — đã phân công" : "");
-                return { value: id, label, disabled: alreadyIn };
+              options={staffList.map((staff) => {
+                const id = staff.user_id ?? staff.id;
+                const alreadyAssigned = activeShift?.assignments?.some((assignment) => assignment.user_id === id);
+                const label =
+                  (staff.full_name ?? staff.username ?? `User #${id}`) +
+                  (staff.employee_code ? ` (${staff.employee_code})` : "") +
+                  (alreadyAssigned ? " - da phan cong" : "");
+
+                return {
+                  value: id,
+                  label,
+                  disabled: alreadyAssigned,
+                };
               })}
-              filterOption={(input, opt) =>
-                opt?.label?.toLowerCase().includes(input.toLowerCase())
-              }
             />
           </Form.Item>
 
-          <Form.Item name="note" label="Ghi chú (tuỳ chọn)">
-            <Input.TextArea rows={2} placeholder="Ghi chú khi phân công..." />
+          <Form.Item name="note" label="Ghi chu">
+            <Input.TextArea rows={2} placeholder="Ghi chu khi phan cong" />
           </Form.Item>
         </Form>
       </Modal>
@@ -527,18 +424,11 @@ export default function ScheduleTable({
 }
 
 ScheduleTable.propTypes = {
-  /** Fully-loaded Schedule object, including shifts[].assignments[] */
-  schedule:    PropTypes.object,
-  /** If true, cells are clickable and show the Assign modal + add-shift button */
-  editable:    PropTypes.bool,
-  /** Called after a successful staff assignment so the parent can refetch */
-  onAssigned:  PropTypes.func,
-  /**
-   * Called with a date string 'YYYY-MM-DD' when the user clicks the
-   * '+ Thêm ca trực' button on a day column header.
-   * The parent is responsible for opening the add-shift form / modal.
-   */
-  onAddShift:  PropTypes.func,
-  /** Optional pre-loaded staff array; fetched internally when absent */
-  staffList:   PropTypes.array,
+  schedule: PropTypes.object,
+  editable: PropTypes.bool,
+  onAssigned: PropTypes.func,
+  onAddShift: PropTypes.func,
+  onEditShift: PropTypes.func,
+  onDeleteShift: PropTypes.func,
+  staffList: PropTypes.array,
 };
