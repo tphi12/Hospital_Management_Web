@@ -14,6 +14,8 @@ const fileFilter = (req, file, cb) => {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/csv',
+    'application/csv',
     'application/vnd.ms-powerpoint',
     'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     'image/jpeg',
@@ -24,7 +26,7 @@ const fileFilter = (req, file, cb) => {
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Loại file không được hỗ trợ. Chỉ chấp nhận PDF, Word, Excel, PowerPoint, và ảnh'), false);
+    cb(new Error('Loại file không được hỗ trợ. Chỉ chấp nhận PDF, Word, Excel, CSV, PowerPoint, và ảnh'), false);
   }
 };
 

@@ -5,6 +5,7 @@ const WeeklyWorkItem = require('../models/WeeklyWorkItem');
 const Role = require('../models/Role');
 const Department = require('../models/Department');
 const { ScheduleType, ScheduleStatus } = require('../utils/enums');
+const SchedulePermissionService = require('./SchedulePermissionService');
 
 /**
  * ScheduleService
@@ -281,7 +282,7 @@ class ScheduleService {
       throw new Error('Only draft schedules can be submitted');
     }
 
-    if (user.department_id !== schedule.source_department_id) {
+    if (!SchedulePermissionService.canSubmit(user, schedule)) {
       throw new Error('You do not have permission to submit this schedule');
     }
 
@@ -307,11 +308,16 @@ class ScheduleService {
       throw new Error('Schedule not found');
     }
 
-    if (schedule.status !== ScheduleStatus.SUBMITTED) {
+    const canApproveWeeklyDraft = (
+      schedule.schedule_type === ScheduleType.WEEKLY_WORK &&
+      schedule.status === ScheduleStatus.DRAFT
+    );
+
+    if (schedule.status !== ScheduleStatus.SUBMITTED && !canApproveWeeklyDraft) {
       throw new Error('Only submitted schedules can be approved');
     }
 
-    if (user.department_id !== schedule.owner_department_id) {
+    if (!SchedulePermissionService.canApprove(user, schedule)) {
       throw new Error('You do not have permission to approve this schedule');
     }
 
@@ -338,16 +344,16 @@ class ScheduleService {
       throw new Error('Schedule not found');
     }
 
-    if (schedule.status === ScheduleStatus.SUBMITTED) {
-      throw new Error('Submitted schedules cannot be updated');
-    }
-
-    if (schedule.status === ScheduleStatus.DRAFT) {
-      if (user.department_id !== schedule.source_department_id) {
+    if (!SchedulePermissionService.canUpdate(user, schedule)) {
+      if (schedule.status === ScheduleStatus.DRAFT) {
         throw new Error('Only source department can update draft schedules');
       }
-    } else if (schedule.status === ScheduleStatus.APPROVED) {
-      if (user.department_id !== schedule.owner_department_id) {
+
+      if (schedule.status === ScheduleStatus.SUBMITTED) {
+        throw new Error('Only owner department can update submitted schedules');
+      }
+
+      if (schedule.status === ScheduleStatus.APPROVED) {
         throw new Error('Only owner department can update approved schedules');
       }
     }
@@ -387,10 +393,11 @@ class ScheduleService {
     const khth = await Department.findByCode('KHTH');
     if (!khth) throw new Error('KHTH department not found in system');
 
-    // Only MANAGER of KHTH may create
-    const hasPermission = await this.hasRole(userId, 'MANAGER', 'department', khth.department_id);
-    if (!hasPermission) {
-      throw new Error('Only KHTH MANAGER can create weekly work schedules');
+    const hasManagerRole = await this.hasRole(userId, 'MANAGER', 'department', khth.department_id);
+    const hasStaffRole = await this.hasRole(userId, 'STAFF', 'department', khth.department_id);
+
+    if (!hasManagerRole && !hasStaffRole) {
+      throw new Error('Only KHTH STAFF or MANAGER can create weekly work schedules');
     }
 
     // Duplicate check (same week/year for weekly_work)
@@ -436,7 +443,15 @@ class ScheduleService {
    * @returns {Promise<number>} New WeeklyWorkItem ID
    */
   static async addWeeklyWorkItem(data) {
-    const { scheduleId, workDate, content, location, participants } = data;
+    const {
+      scheduleId,
+      workDate,
+      timePeriod = 'Sáng',
+      content,
+      location,
+      participantIds,
+      participants,
+    } = data;
 
     if (!scheduleId) throw new Error('Schedule ID is required');
     if (!workDate)   throw new Error('Work date is required');
@@ -447,6 +462,11 @@ class ScheduleService {
       throw new Error('Work date must be in YYYY-MM-DD format');
     }
 
+    const validTimePeriods = ['Sáng', 'Chiều'];
+    if (!validTimePeriods.includes(timePeriod)) {
+      throw new Error('Time period must be "Sáng" or "Chiều"');
+    }
+
     const schedule = await Schedule.findById(scheduleId);
     if (!schedule) throw new Error('Schedule not found');
 
@@ -454,15 +474,151 @@ class ScheduleService {
       throw new Error('Work items can only be added to weekly_work schedules');
     }
 
+    let normalizedParticipantIds = [];
+
+    if (Array.isArray(participantIds)) {
+      normalizedParticipantIds = participantIds;
+    } else if (typeof participants === 'string' && participants.trim()) {
+      const rawValue = participants.trim();
+
+      if (rawValue.startsWith('[')) {
+        try {
+          const parsed = JSON.parse(rawValue);
+          if (Array.isArray(parsed)) {
+            normalizedParticipantIds = parsed;
+          }
+        } catch (error) {
+          normalizedParticipantIds = [];
+        }
+      } else {
+        normalizedParticipantIds = rawValue
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean);
+      }
+    }
+
     const itemId = await WeeklyWorkItem.create({
       schedule_id:  scheduleId,
       work_date:    workDate,
+      time_period:  timePeriod,
       content,
       location:     location || null,
-      participants: participants || null
+      participantIds: normalizedParticipantIds
     });
 
     return itemId;
+  }
+
+  /**
+   * Import weekly work items from parsed rows.
+   * Strategy: import valid rows, skip invalid rows, and return per-row errors.
+   *
+   * @param {Object} data
+   * @param {number} data.scheduleId
+   * @param {Array<Object>} data.items
+   * @returns {Promise<{totalRows:number,successCount:number,failedCount:number,errors:Array}>}
+   */
+  static async importWeeklyWorkItems(data) {
+    const { scheduleId, items } = data;
+
+    if (!scheduleId) throw new Error('Schedule ID is required');
+    if (!Array.isArray(items)) throw new Error('Items must be an array');
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) throw new Error('Schedule not found');
+
+    if (schedule.schedule_type !== ScheduleType.WEEKLY_WORK) {
+      throw new Error('Work items can only be imported to weekly_work schedules');
+    }
+
+    const errors = [];
+    let successCount = 0;
+
+    for (let index = 0; index < items.length; index += 1) {
+      const row = items[index] || {};
+      const rowNumber = row.rowNumber || index + 2;
+
+      const workDate = String(row.work_date || '').trim();
+      const timePeriod = String(row.time_period || 'Sáng').trim();
+      const content = String(row.content || '').trim();
+      const location = row.location ? String(row.location).trim() : null;
+      const participants = row.participants ? String(row.participants).trim() : null;
+      let parsedParticipantIds = [];
+
+      if (participants) {
+        if (participants.startsWith('[')) {
+          try {
+            const parsed = JSON.parse(participants);
+            if (Array.isArray(parsed)) {
+              parsedParticipantIds = parsed;
+            }
+          } catch (error) {
+            parsedParticipantIds = [];
+          }
+        } else {
+          parsedParticipantIds = participants
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean);
+        }
+      }
+
+      if (!workDate) {
+        errors.push({ row: rowNumber, field: 'work_date', message: 'Thiếu ngày công tác' });
+        continue;
+      }
+
+      if (!content) {
+        errors.push({ row: rowNumber, field: 'content', message: 'Thiếu nội dung công tác' });
+        continue;
+      }
+
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(workDate)) {
+        errors.push({
+          row: rowNumber,
+          field: 'work_date',
+          message: 'Ngày công tác phải theo định dạng YYYY-MM-DD'
+        });
+        continue;
+      }
+
+      const validTimePeriods = ['Sáng', 'Chiều'];
+      if (!validTimePeriods.includes(timePeriod)) {
+        errors.push({
+          row: rowNumber,
+          field: 'time_period',
+          message: 'Giờ công tác phải là "Sáng" hoặc "Chiều"'
+        });
+        continue;
+      }
+
+      try {
+        await WeeklyWorkItem.create({
+          schedule_id: scheduleId,
+          work_date: workDate,
+          time_period: timePeriod,
+          content,
+          location,
+          participantIds: parsedParticipantIds
+        });
+        successCount += 1;
+      } catch (error) {
+        errors.push({
+          row: rowNumber,
+          field: 'database',
+          message: error.message || 'Lỗi lưu dữ liệu vào hệ thống'
+        });
+      }
+    }
+
+    return {
+      totalRows: items.length,
+      successCount,
+      failedCount: errors.length,
+      errors
+    };
   }
 
   /**
@@ -489,7 +645,7 @@ class ScheduleService {
       throw new Error('Only submitted schedules can be approved');
     }
 
-    if (user.department_id !== schedule.owner_department_id) {
+    if (!SchedulePermissionService.canApprove(user, schedule)) {
       throw new Error('You do not have permission to approve this schedule');
     }
 

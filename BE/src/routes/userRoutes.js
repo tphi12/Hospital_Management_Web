@@ -9,6 +9,9 @@ const { upload, handleMulterError } = require('../middleware/upload');
 router.use(auth);
 
 router.get('/', userController.getAllUsers);
+router.get('/picker/users', userController.getUsersForPicker);
+router.get('/picker/departments', userController.getDepartmentsForFilter);
+router.get('/picker/by-ids', userController.getUsersByIds);
 router.get('/:id', checkAdmin, userController.getUserById);
 router.post('/', checkAdmin, userController.createUser);
 router.put('/:id', checkAdmin, userController.updateUser);
