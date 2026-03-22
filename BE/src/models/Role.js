@@ -36,8 +36,8 @@ class Role {
     return rows;
   }
 
-  static async assignRoleToUser(userId, roleId, scopeType, departmentId = null) {
-    const [result] = await pool.execute(
+  static async assignRoleToUser(userId, roleId, scopeType, departmentId = null, db = pool) {
+    const [result] = await db.execute(
       `INSERT INTO USER_ROLE (user_id, role_id, scope_type, department_id, created_at)
        VALUES (?, ?, ?, ?, NOW())`,
       [userId, roleId, scopeType, departmentId]

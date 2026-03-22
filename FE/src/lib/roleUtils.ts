@@ -75,6 +75,24 @@ export function isKHTHStaff(user: AuthUser | null | undefined): boolean {
   return inKHTHByRoleDepartment;
 }
 
+export function isKHTHMember(user: AuthUser | null | undefined): boolean {
+  if (!user) return false;
+
+  const userDeptCode = String(user.departmentCode ?? '').toUpperCase();
+  if (userDeptCode === 'KHTH') return true;
+
+  return (user.roles ?? []).some((r) => {
+    const deptCode = String(r?.department_code ?? '').toUpperCase();
+    const deptName = String(r?.department_name ?? '').toUpperCase();
+    return deptCode === 'KHTH' || deptName.includes('KẾ HOẠCH TỔNG HỢP') || deptName.includes('KE HOACH TONG HOP');
+  });
+}
+
+export function canManageKHTHSchedules(user: AuthUser | null | undefined): boolean {
+  if (!user) return false;
+  return isKHTHMember(user) && (hasRole(user, ROLES.STAFF) || hasRole(user, 'MANAGER'));
+}
+
 /**
  * Returns all effective role codes used by FE permission checks, including
  * aliases and virtual roles derived from business rules.
@@ -90,7 +108,7 @@ export function getEffectiveRoleCodes(user: AuthUser | null | undefined): Set<st
 
   if (codes.has('CLERK')) codes.add(ROLES.DEPT_CLERK);
   if (codes.has('MANAGER')) codes.add(ROLES.HEAD_OF_DEPT);
-  if (isKHTHStaff(user)) codes.add(ROLES.KHTH);
+  if (isKHTHMember(user)) codes.add(ROLES.KHTH);
 
   return codes;
 }

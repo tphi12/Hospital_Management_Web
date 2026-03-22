@@ -465,7 +465,7 @@ describe('ScheduleService', () => {
 
     it('clerk can submit own draft when department matches source_department_id', async () => {
       // Arrange
-      const user = { user_id: 5, department_id: 3 };
+      const user = { user_id: 5, department_id: 3, roles: [{ role_code: 'CLERK', scope_type: 'department', department_id: 3 }] };
       Schedule.findById.mockResolvedValue(mockScheduleDraft);
       Schedule.updateStatus.mockResolvedValue(true);
 
@@ -479,7 +479,7 @@ describe('ScheduleService', () => {
 
     it('cannot submit another department schedule (wrong department)', async () => {
       // Arrange — user belongs to department 5, schedule owned by department 3
-      const user = { user_id: 5, department_id: 5 };
+      const user = { user_id: 5, department_id: 5, roles: [{ role_code: 'CLERK', scope_type: 'department', department_id: 5 }] };
       Schedule.findById.mockResolvedValue(mockScheduleDraft);
 
       // Act & Assert
@@ -492,7 +492,7 @@ describe('ScheduleService', () => {
 
     it('cannot resubmit a schedule that is no longer in draft', async () => {
       // Arrange — schedule is already submitted
-      const user = { user_id: 5, department_id: 3 };
+      const user = { user_id: 5, department_id: 3, roles: [{ role_code: 'CLERK', scope_type: 'department', department_id: 3 }] };
       Schedule.findById.mockResolvedValue({
         ...mockScheduleDraft,
         status: 'submitted'
@@ -516,7 +516,7 @@ describe('ScheduleService', () => {
 
     it('KHTH staff can approve a submitted schedule', async () => {
       // Arrange — user belongs to KHTH (department_id=2), schedule owner_department_id=2
-      const user = { user_id: 10, department_id: 2 };
+      const user = { user_id: 10, department_id: 2, roles: [{ role_code: 'MANAGER', scope_type: 'department', department_id: 2 }] };
       Schedule.findById.mockResolvedValue(mockScheduleSubmitted);
       Schedule.updateStatus.mockResolvedValue(true);
 
@@ -530,7 +530,7 @@ describe('ScheduleService', () => {
 
     it('non-KHTH staff cannot approve (wrong owner_department)', async () => {
       // Arrange — user belongs to department 5, not the owner department 2
-      const user = { user_id: 10, department_id: 5 };
+      const user = { user_id: 10, department_id: 5, roles: [{ role_code: 'MANAGER', scope_type: 'department', department_id: 5 }] };
       Schedule.findById.mockResolvedValue(mockScheduleSubmitted);
 
       // Act & Assert
@@ -541,9 +541,9 @@ describe('ScheduleService', () => {
       expect(Schedule.updateStatus).not.toHaveBeenCalled();
     });
 
-    it('cannot approve a schedule that is not submitted (e.g. draft)', async () => {
+    it('cannot approve a duty schedule that is not submitted (e.g. draft)', async () => {
       // Arrange — schedule is still in draft state
-      const user = { user_id: 10, department_id: 2 };
+      const user = { user_id: 10, department_id: 2, roles: [{ role_code: 'MANAGER', scope_type: 'department', department_id: 2 }] };
       Schedule.findById.mockResolvedValue({
         ...mockScheduleSubmitted,
         status: 'draft'
@@ -556,6 +556,25 @@ describe('ScheduleService', () => {
 
       expect(Schedule.updateStatus).not.toHaveBeenCalled();
     });
+
+    it('KHTH manager can publish a weekly_work draft directly', async () => {
+      const user = {
+        user_id: 10,
+        department_id: 2,
+        roles: [{ role_code: 'MANAGER', scope_type: 'department', department_id: 2 }],
+      };
+      Schedule.findById.mockResolvedValue({
+        ...mockScheduleSubmitted,
+        schedule_type: 'weekly_work',
+        status: 'draft',
+      });
+      Schedule.updateStatus.mockResolvedValue(true);
+
+      const result = await ScheduleService.approveSchedule(100, user);
+
+      expect(result).toBe(true);
+      expect(Schedule.updateStatus).toHaveBeenCalledWith(100, ScheduleStatus.APPROVED);
+    });
   });
 
   describe('updateSchedule', () => {
@@ -563,7 +582,7 @@ describe('ScheduleService', () => {
 
     it('source_department can update a draft schedule', async () => {
       // Arrange — user is in department 3 (same as source_department_id)
-      const user = { user_id: 5, department_id: 3 };
+      const user = { user_id: 5, department_id: 3, roles: [{ role_code: 'CLERK', scope_type: 'department', department_id: 3 }] };
       const mockSchedule = {
         schedule_id: 100,
         status: 'draft',
@@ -583,7 +602,7 @@ describe('ScheduleService', () => {
 
     it('wrong department cannot update a draft schedule', async () => {
       // Arrange — user is in department 5, source is department 3
-      const user = { user_id: 5, department_id: 5 };
+      const user = { user_id: 5, department_id: 5, roles: [{ role_code: 'CLERK', scope_type: 'department', department_id: 5 }] };
       const mockSchedule = {
         schedule_id: 100,
         status: 'draft',
@@ -600,9 +619,9 @@ describe('ScheduleService', () => {
       expect(Schedule.update).not.toHaveBeenCalled();
     });
 
-    it('submitted schedule cannot be updated (even by owner_department)', async () => {
+    it('owner_department can update a submitted schedule before publish', async () => {
       // Arrange — user is in KHTH (department_id=2), schedule is submitted
-      const user = { user_id: 10, department_id: 2 };
+      const user = { user_id: 10, department_id: 2, roles: [{ role_code: 'MANAGER', scope_type: 'department', department_id: 2 }] };
       const mockSchedule = {
         schedule_id: 100,
         status: 'submitted',
@@ -610,18 +629,17 @@ describe('ScheduleService', () => {
         owner_department_id: 2
       };
       Schedule.findById.mockResolvedValue(mockSchedule);
+      Schedule.update.mockResolvedValue(true);
 
-      // Act & Assert
-      await expect(ScheduleService.updateSchedule(100, user, updateData))
-        .rejects
-        .toThrow('Submitted schedules cannot be updated');
+      const result = await ScheduleService.updateSchedule(100, user, updateData);
 
-      expect(Schedule.update).not.toHaveBeenCalled();
+      expect(result).toBe(true);
+      expect(Schedule.update).toHaveBeenCalledWith(100, updateData);
     });
 
-    it('wrong department cannot update a submitted schedule (same submitted lock)', async () => {
+    it('wrong department cannot update a submitted schedule', async () => {
       // Arrange — source department 3 tries to update after submission
-      const user = { user_id: 5, department_id: 3 };
+      const user = { user_id: 5, department_id: 3, roles: [{ role_code: 'CLERK', scope_type: 'department', department_id: 3 }] };
       const mockSchedule = {
         schedule_id: 100,
         status: 'submitted',
@@ -633,7 +651,7 @@ describe('ScheduleService', () => {
       // Act & Assert
       await expect(ScheduleService.updateSchedule(100, user, updateData))
         .rejects
-        .toThrow('Submitted schedules cannot be updated');
+        .toThrow('Only owner department can update submitted schedules');
 
       expect(Schedule.update).not.toHaveBeenCalled();
     });
@@ -647,6 +665,9 @@ describe('ScheduleService', () => {
     const mockKhth = { department_id: 2, department_code: 'KHTH' };
     const mockManagerRoles = [
       { role_code: 'MANAGER', scope_type: 'department', department_id: 2 }
+    ];
+    const mockStaffRoles = [
+      { role_code: 'STAFF', scope_type: 'department', department_id: 2 }
     ];
 
     it('KHTH MANAGER can create a weekly work schedule', async () => {
@@ -678,7 +699,26 @@ describe('ScheduleService', () => {
       }));
     });
 
-    it('non-MANAGER cannot create a weekly work schedule', async () => {
+    it('KHTH STAFF can create a weekly work schedule', async () => {
+      Department.findByCode.mockResolvedValue(mockKhth);
+      Role.getUserRoles.mockResolvedValue(mockStaffRoles);
+      Schedule.checkExists.mockResolvedValue(null);
+      Schedule.create.mockResolvedValue(201);
+
+      const id = await ScheduleService.createWeeklySchedule({
+        userId: 10,
+        week: 5,
+        year: 2025,
+      });
+
+      expect(id).toBe(201);
+      expect(Schedule.create).toHaveBeenCalledWith(expect.objectContaining({
+        schedule_type: ScheduleType.WEEKLY_WORK,
+        department_id: mockKhth.department_id,
+      }));
+    });
+
+    it('non-KHTH operator cannot create a weekly work schedule', async () => {
       // Arrange — user has CLERK role, not MANAGER
       Department.findByCode.mockResolvedValue(mockKhth);
       Role.getUserRoles.mockResolvedValue([
@@ -687,7 +727,7 @@ describe('ScheduleService', () => {
 
       await expect(
         ScheduleService.createWeeklySchedule({ userId: 10, week: 5, year: 2025 })
-      ).rejects.toThrow('Only KHTH MANAGER can create weekly work schedules');
+      ).rejects.toThrow('Only KHTH STAFF or MANAGER can create weekly work schedules');
 
       expect(Schedule.create).not.toHaveBeenCalled();
     });
@@ -701,7 +741,7 @@ describe('ScheduleService', () => {
 
       await expect(
         ScheduleService.createWeeklySchedule({ userId: 10, week: 5, year: 2025 })
-      ).rejects.toThrow('Only KHTH MANAGER can create weekly work schedules');
+      ).rejects.toThrow('Only KHTH STAFF or MANAGER can create weekly work schedules');
 
       expect(Schedule.create).not.toHaveBeenCalled();
     });
@@ -744,18 +784,20 @@ describe('ScheduleService', () => {
         workDate:     '2025-02-03',
         content:      'Hospital quality review meeting',
         location:     'Conference Room A',
-        participants: 'Dr. Anh, Nurse Thu, Admin Hoa'
+        participantIds: [11, 12, 13]
       });
 
       // Assert
       expect(itemId).toBe(500);
-      expect(WeeklyWorkItem.create).toHaveBeenCalledWith({
-        schedule_id:  200,
-        work_date:    '2025-02-03',
-        content:      'Hospital quality review meeting',
-        location:     'Conference Room A',
-        participants: 'Dr. Anh, Nurse Thu, Admin Hoa'
-      });
+      expect(WeeklyWorkItem.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          schedule_id:  200,
+          work_date:    '2025-02-03',
+          content:      'Hospital quality review meeting',
+          location:     'Conference Room A',
+          participantIds: [11, 12, 13]
+        })
+      );
     });
 
     it('adds a work item with only required fields (location/participants are null)', async () => {
@@ -770,7 +812,7 @@ describe('ScheduleService', () => {
 
       expect(itemId).toBe(501);
       expect(WeeklyWorkItem.create).toHaveBeenCalledWith(
-        expect.objectContaining({ location: null, participants: null })
+        expect.objectContaining({ location: null, participantIds: [] })
       );
     });
 
@@ -823,7 +865,7 @@ describe('ScheduleService', () => {
 
     it('KHTH user can approve a submitted weekly_work schedule', async () => {
       // Arrange
-      const user = { userId: 10, department_id: KHTH_DEPT };
+      const user = { userId: 10, department_id: KHTH_DEPT, roles: [{ role_code: 'MANAGER', scope_type: 'department', department_id: KHTH_DEPT }] };
       Schedule.findById.mockResolvedValue(mockWeeklySubmitted);
       Schedule.updateStatus.mockResolvedValue(true);
 
@@ -836,7 +878,7 @@ describe('ScheduleService', () => {
     });
 
     it('non-KHTH user cannot approve (wrong department)', async () => {
-      const user = { userId: 10, department_id: 3 };
+      const user = { userId: 10, department_id: 3, roles: [{ role_code: 'MANAGER', scope_type: 'department', department_id: 3 }] };
       Schedule.findById.mockResolvedValue(mockWeeklySubmitted);
 
       await expect(ScheduleService.approveWeeklySchedule(200, user))
@@ -846,7 +888,7 @@ describe('ScheduleService', () => {
     });
 
     it('cannot approve a draft weekly_work schedule (must be submitted first)', async () => {
-      const user = { userId: 10, department_id: KHTH_DEPT };
+      const user = { userId: 10, department_id: KHTH_DEPT, roles: [{ role_code: 'MANAGER', scope_type: 'department', department_id: KHTH_DEPT }] };
       Schedule.findById.mockResolvedValue({ ...mockWeeklySubmitted, status: 'draft' });
 
       await expect(ScheduleService.approveWeeklySchedule(200, user))
@@ -856,7 +898,7 @@ describe('ScheduleService', () => {
     });
 
     it('cannot use approveWeeklySchedule on a duty schedule (wrong type)', async () => {
-      const user = { userId: 10, department_id: KHTH_DEPT };
+      const user = { userId: 10, department_id: KHTH_DEPT, roles: [{ role_code: 'MANAGER', scope_type: 'department', department_id: KHTH_DEPT }] };
       Schedule.findById.mockResolvedValue({
         ...mockWeeklySubmitted,
         schedule_type: 'duty'
@@ -871,7 +913,7 @@ describe('ScheduleService', () => {
     it('returns schedule not found for a missing schedule', async () => {
       Schedule.findById.mockResolvedValue(null);
 
-      await expect(ScheduleService.approveWeeklySchedule(999, { userId: 10, department_id: KHTH_DEPT }))
+      await expect(ScheduleService.approveWeeklySchedule(999, { userId: 10, department_id: KHTH_DEPT, roles: [{ role_code: 'MANAGER', scope_type: 'department', department_id: KHTH_DEPT }] }))
         .rejects.toThrow('Schedule not found');
     });
   });

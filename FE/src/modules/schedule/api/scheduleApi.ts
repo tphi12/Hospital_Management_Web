@@ -33,6 +33,15 @@ export type {
 
 // ─── Request payloads ─────────────────────────────────────────────────────────
 
+export interface ScheduleQueryParams {
+  week?: number;
+  year?: number;
+  schedule_type?: ScheduleType;
+  department_id?: number;
+  status?: ScheduleStatus;
+  source_department_id?: number;
+}
+
 export interface CreateDutySchedulePayload {
   week:         number;
   year:         number;
@@ -53,18 +62,34 @@ export interface AddShiftPayload {
   staff_ids?:    number[];
 }
 
+export interface UpdateShiftPayload {
+  shift_date?: string;
+  shift_type?: ShiftType;
+  start_time?: string;
+  end_time?: string;
+  max_staff?: number;
+  note?: string;
+}
+
 export interface AssignUserToShiftPayload {
   shift_id: number;
   user_id:  number;
   note?:    string;
 }
 
+export interface CreateWeeklyWorkSchedulePayload {
+  week: number;
+  year: number;
+  description?: string;
+}
+
 export interface AddWeeklyWorkItemPayload {
-  schedule_id:   number;
-  work_date:     string;        // YYYY-MM-DD
-  content:       string;
-  location?:     string;
-  participants?: string;
+  schedule_id: number;
+  work_date: string;
+  time_period?: string;
+  content: string;
+  location?: string;
+  participantIds?: number[] | null;
 }
 
 // ─── Response wrapper ─────────────────────────────────────────────────────────
@@ -126,6 +151,12 @@ export async function getSchedulesByWeek(
   );
 }
 
+export async function getSchedules(
+  params: ScheduleQueryParams = {},
+): Promise<ApiResponse<Schedule[]>> {
+  return request(() => apiClient.get('/schedules', { params }));
+}
+
 /**
  * Create a new duty schedule for the authenticated user's department.
  *
@@ -161,6 +192,12 @@ export async function approveSchedule(
   return request(() => apiClient.patch(`/schedules/${id}/approve`));
 }
 
+export async function deleteSchedule(
+  id: number,
+): Promise<ApiResponse<void>> {
+  return request(() => apiClient.delete(`/schedules/${id}`));
+}
+
 /**
  * Add a shift to an existing duty schedule.
  *
@@ -170,6 +207,19 @@ export async function addShift(
   data: AddShiftPayload,
 ): Promise<ApiResponse<Shift>> {
   return request(() => apiClient.post('/shifts', data));
+}
+
+export async function updateShift(
+  shiftId: number,
+  data: UpdateShiftPayload,
+): Promise<ApiResponse<Shift>> {
+  return request(() => apiClient.put(`/shifts/${shiftId}`, data));
+}
+
+export async function deleteShift(
+  shiftId: number,
+): Promise<ApiResponse<void>> {
+  return request(() => apiClient.delete(`/shifts/${shiftId}`));
 }
 
 /**
@@ -193,24 +243,72 @@ export async function getWeeklyWorkSchedule(
   week: number,
   year: number,
 ): Promise<ApiResponse<Schedule[]>> {
+  return getSchedules({ week, year, schedule_type: 'weekly_work' });
+}
+
+export async function createWeeklyWorkSchedule(
+  data: CreateWeeklyWorkSchedulePayload,
+): Promise<ApiResponse<Schedule>> {
   return request(() =>
-    apiClient.get('/schedules', {
-      params: { week, year, schedule_type: 'weekly_work' },
-    }),
+    apiClient.post('/schedules', { ...data, schedule_type: 'weekly_work' }),
   );
+}
+
+export async function getWeeklyWorkItems(
+  scheduleId: number,
+): Promise<ApiResponse<WeeklyWorkItem[]>> {
+  return request(() => apiClient.get(`/schedules/${scheduleId}/weekly-items`));
+}
+
+export async function getWeeklyWorkItemById(
+  scheduleId: number,
+  itemId: number,
+): Promise<ApiResponse<WeeklyWorkItem>> {
+  return request(() => apiClient.get(`/schedules/${scheduleId}/weekly-items/${itemId}`));
 }
 
 /**
  * Add a work item entry to a weekly_work schedule.
  *
- * POST /schedules/:scheduleId/work-items
+ * POST /schedules/:scheduleId/weekly-items
  */
 export async function addWeeklyWorkItem(
   data: AddWeeklyWorkItemPayload,
 ): Promise<ApiResponse<WeeklyWorkItem>> {
   const { schedule_id, ...body } = data;
   return request(() =>
-    apiClient.post(`/schedules/${schedule_id}/work-items`, body),
+    apiClient.post(`/schedules/${schedule_id}/weekly-items`, body),
+  );
+}
+
+export async function updateWeeklyWorkItem(
+  scheduleId: number,
+  itemId: number,
+  data: Omit<AddWeeklyWorkItemPayload, 'schedule_id'>,
+): Promise<ApiResponse<WeeklyWorkItem>> {
+  return request(() =>
+    apiClient.put(`/schedules/${scheduleId}/weekly-items/${itemId}`, data),
+  );
+}
+
+export async function deleteWeeklyWorkItem(
+  scheduleId: number,
+  itemId: number,
+): Promise<ApiResponse<void>> {
+  return request(() => apiClient.delete(`/schedules/${scheduleId}/weekly-items/${itemId}`));
+}
+
+export async function importWeeklyWorkItems(
+  scheduleId: number,
+  file: File,
+): Promise<ApiResponse<WeeklyWorkItem[]>> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  return request(() =>
+    apiClient.post(`/schedules/${scheduleId}/weekly-items/import`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   );
 }
 

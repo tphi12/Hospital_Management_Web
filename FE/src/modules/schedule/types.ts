@@ -51,9 +51,11 @@ export interface WeeklyWorkItem {
   weekly_work_item_id: number;
   schedule_id:         number;
   work_date:           string;   // YYYY-MM-DD
+  time_period?:        string;
   content:             string;
   location?:           string;
-  participants?:       string;
+  participantIds?:     number[];
+  participantNames?:   string | null;
   created_at:          string;
   updated_at:          string;
 }

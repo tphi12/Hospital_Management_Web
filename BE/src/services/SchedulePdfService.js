@@ -305,7 +305,7 @@ class SchedulePdfService {
    * Build a weekly-work-schedule PDF from plain data (no DB calls).
    * @param {Object} data – { schedule_type, week, year, status,
    *                         owner_department_name,
-   *                         items: [{ work_date, content, location, participants }] }
+   *                         items: [{ work_date, content, location, participantNames }] }
    * @returns {Promise<Buffer>}
    */
   static async buildWeeklyWorkPdf(data) {
@@ -323,7 +323,7 @@ class SchedulePdfService {
         fmtDate(item.work_date),
         item.content,
         item.location,
-        item.participants,
+        item.participantNames ?? item.participants,
       ]),
     ].filter(Boolean).join('; ');
 
@@ -364,7 +364,12 @@ class SchedulePdfService {
     items.forEach((item, idx) => {
       needSpace(doc, 28);
       drawTableRow(doc,
-        [fmtDate(item.work_date), item.content ?? '', item.location ?? '—', item.participants ?? '—'],
+        [
+          fmtDate(item.work_date),
+          item.content ?? '',
+          item.location ?? '—',
+          item.participantNames ?? item.participants ?? '—'
+        ],
         W, false, idx % 2 === 1
       );
     });
