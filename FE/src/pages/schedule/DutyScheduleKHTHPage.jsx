@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Button,
   Empty,
@@ -21,7 +21,6 @@ import {
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
 import { isoWeeksInYear, weekDays } from "../../modules/schedule/utils/calendar";
-import { useAuth } from "../../hooks/useAuth";
 import {
   addShift,
   deleteSchedule,
@@ -199,7 +198,6 @@ function MasterMergedScheduleTable({ schedule, days }) {
 }
 
 export default function DutyScheduleKHTHPage() {
-  const { user } = useAuth();
   const approveMutation = useApproveScheduleMutation();
   const [shiftForm] = Form.useForm();
   const [currentWeek, setCurrentWeek] = useState(() => dayjs().isoWeek());
