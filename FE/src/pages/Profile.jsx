@@ -6,9 +6,8 @@ import {
     EditOutlined, SaveOutlined, BankOutlined
 } from "@ant-design/icons";
 import {
-    Card, Avatar, Button, Tabs, Form, Input, Row, Col, Typography, Tag, Divider, Upload, Breadcrumb, Space, App, Spin
+    Card, Avatar, Button, Tabs, Form, Input, Row, Col, Typography, Tag, Divider, Upload, Breadcrumb, Space, App
 } from "antd";
-import { userService } from "../services";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -18,64 +17,16 @@ const Profile = () => {
     const [form] = Form.useForm();
     const [activeTab, setActiveTab] = useState("info");
 
-    const [AvatarLoading, setAvatarLoading] = useState(false);
-    const [avatar, setAvatar] = useState(user.avatar || user.avatar_path || `https://ui-avatars.com/api/?name=${user.name}&background=random`);
+    const [avatar] = useState(user.avatar || `https://ui-avatars.com/api/?name=${user.name}&background=random`);
 
-    const handleFinish = async (values) => {
-        try {
-            messageApi.loading({ content: "Đang cập nhật...", key: "updProfile" });
-            const payload = {
-                full_name: values.name,
-                email: values.email,
-                phone: values.phone,
-                bio: values.bio,
-            };
-            const userId = user.id || user.user_id;
-            await userService.updateUser(userId, payload);
-            
-            updateUser({
-                ...user,
-                ...values,
-                name: values.name,
-                avatar
-            });
-            messageApi.success({ content: "Cập nhật thông tin thành công!", key: "updProfile" });
-            setActiveTab("info");
-        } catch (error) {
-            messageApi.error({ content: "Cập nhật thất bại!", key: "updProfile" });
-        }
-    };
-
-    const handleAvatarUpload = async (options) => {
-        const { file, onSuccess, onError } = options;
-        
-        try {
-            setAvatarLoading(true);
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            const userId = user.id || user.user_id;
-            const res = await userService.uploadAvatar(userId, formData);
-            
-            if (res.success && res.data?.avatarUrl) {
-                setAvatar(res.data.avatarUrl);
-                updateUser({
-                    ...user,
-                    avatar: res.data.avatarUrl,
-                    avatar_path: res.data.avatarUrl
-                });
-                onSuccess("Ok");
-                messageApi.success("Cập nhật ảnh đại diện thành công!");
-            } else {
-                throw new Error("Không nhận được link ảnh");
-            }
-        } catch (err) {
-            console.error(err);
-            onError({ err });
-            messageApi.error("Cập nhật ảnh đại diện thất bại!");
-        } finally {
-            setAvatarLoading(false);
-        }
+    const handleFinish = (values) => {
+        updateUser({
+            ...user,
+            ...values,
+            avatar
+        });
+        messageApi.success("Cập nhật thông tin thành công!");
+        setActiveTab("info");
     };
 
     const items = [
@@ -183,16 +134,24 @@ const Profile = () => {
                     <Card bordered={false} className="shadow-sm text-center">
                         <div className="relative inline-block">
                             <Avatar size={120} src={avatar} className="mb-4 border-4 border-slate-50" />
-                                <Upload
-                                    showUploadList={false}
-                                    customRequest={handleAvatarUpload}
-                                    accept="image/*"
-                                >
+                            <Upload
+                                showUploadList={false}
+                                beforeUpload={() => false}
+                                onChange={(info) => {
+                                    // Mock upload
+                                    if (info.file) {
+                                        // In real app, read file
+                                        messageApi.success("Đã thay đổi ảnh đại diện (Demo)");
+                                    }
+                                }}
+                            >
                                 <Button
                                     type="primary"
                                     shape="circle"
                                     icon={<CameraOutlined />}
+
                                     className="absolute bottom-4 right-0 shadow-md"
+
                                 />
                             </Upload>
                         </div>

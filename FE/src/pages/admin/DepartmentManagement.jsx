@@ -82,6 +82,7 @@ const DepartmentManagement = () => {
             const response = await departmentService.getDepartmentMembers(deptId);
             setMembers(response.data || []);
         } catch (error) {
+            console.error("Failed to fetch members:", error);
             message.error("Không thể tải danh sách thành viên");
         } finally {
             setMembersLoading(false);
@@ -346,19 +347,19 @@ const DepartmentManagement = () => {
                         label="Trưởng phòng"
                         tooltip="Chỉ có thể bổ nhiệm nhân viên đang thuộc phòng ban này."
                     >
-                        <Select 
-                            placeholder="Chọn quản lý" 
-                            allowClear 
-                            showSearch 
+                        <Select
+                            placeholder="Chọn quản lý"
+                            allowClear
+                            showSearch
                             disabled={!editingDept}
                             filterOption={(input, option) =>
                                 option.children.toLowerCase().includes(input.toLowerCase())
-                        }>
+                            }>
                             {users
                                 .filter(u => editingDept && u.department_id === editingDept.id)
                                 .map(u => (
-                                <Select.Option key={u.id} value={u.id}>{u.name} ({u.email})</Select.Option>
-                            ))}
+                                    <Select.Option key={u.id} value={u.id}>{u.name} ({u.email})</Select.Option>
+                                ))}
                         </Select>
                     </Form.Item>
                 </Form>
