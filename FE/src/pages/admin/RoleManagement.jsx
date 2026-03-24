@@ -191,8 +191,7 @@ const RoleManagement = () => {
                             itemLayout="horizontal"
                             dataSource={filteredPermissions}
                             renderItem={(item) => {
-                                const [hasAccess, setHasAccess] = useState(hasPermission(item.id, selectedRole));
-                                console.log(item.id, selectedRole);
+                                const hasAccess= hasPermission(item.id, selectedRole);
                                 return (
                                     <List.Item
                                         actions={[

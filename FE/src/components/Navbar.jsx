@@ -30,30 +30,6 @@ const ROUTE_NAMES = {
     schedule: 'Lịch'
 };
 
-// Đưa menu tĩnh (Demo notification) ra ngoài để không tạo lại mỗi lần render
-const notifMenuProps = {
-    items: [
-        {
-            key: '1',
-            label: (
-                <div className="py-1">
-                    <div className="font-semibold">Tin nhắn mới</div>
-                    <div className="text-xs text-gray-500">Từ Laur • 13 phút trước</div>
-                </div>
-            ),
-        },
-        {
-            key: '2',
-            label: (
-                <div className="py-1">
-                    <div className="font-semibold">Tài liệu mới</div>
-                    <div className="text-xs text-gray-500">Đã tải lên • 1 ngày trước</div>
-                </div>
-            ),
-        },
-    ],
-};
-
 const Navbar = () => {
     const { user, logout } = useAuth();
     const location = useLocation();
