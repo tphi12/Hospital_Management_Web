@@ -20,7 +20,7 @@ import DutyScheduleClerkPage from "./pages/schedule/DutyScheduleClerkPage";
 import DutyScheduleStaffPage from "./pages/schedule/DutyScheduleStaffPage";
 import WeeklySchedule from "./pages/schedule/WeeklySchedule";
 import Profile from "./pages/Profile";
-import NotificationListener from "./components/NotificationListener";
+import MyDocument from "./pages/documents/MyDocument";
 
 import { ConfigProvider, App as AntdApp } from "antd";
 
@@ -100,11 +100,12 @@ function App() {
               <Route
                 path="/documents/upload"
                 element={
-                  <ProtectedRoute allowedRoles={[ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.ADMIN]}>
+                  <ProtectedRoute allowedRoles={[ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.ADMIN, ROLES.HOSPITAL_CLERK, ROLES.KHTH]}>
                     <DocumentUpload />
                   </ProtectedRoute>
                 }
               />
+              
               <Route
                 path="/documents/approvals"
                 element={
@@ -116,8 +117,16 @@ function App() {
               <Route
                 path="/documents/repository"
                 element={
-                  <ProtectedRoute allowedRoles={[ROLES.HOSPITAL_CLERK, ROLES.ADMIN, ROLES.HEAD_OF_DEPT, ROLES.STAFF]}>
+                  <ProtectedRoute allowedRoles={[ROLES.HOSPITAL_CLERK, ROLES.ADMIN, ROLES.HEAD_OF_DEPT, ROLES.STAFF, ROLES.DEPT_CLERK]}>
                     <DocumentList />
+                  </ProtectedRoute>
+                }
+              />
+              <Route 
+                path="/documents/my"
+                element={
+                  <ProtectedRoute allowedRoles={[ROLES.HOSPITAL_CLERK, ROLES.ADMIN, ROLES.HEAD_OF_DEPT, ROLES.STAFF, ROLES.DEPT_CLERK]}>
+                    <MyDocument />
                   </ProtectedRoute>
                 }
               />

@@ -18,7 +18,6 @@ import {
 } from "@ant-design/icons";
 import { Layout, Button, Badge, Dropdown, Avatar, Breadcrumb, Space, theme, Modal, Descriptions, Tag, App as AntdApp } from "antd";
 import { useState } from "react";
-import { documentService } from "../services";
 
 const { Header } = Layout;
 
@@ -215,8 +214,6 @@ const Navbar = () => {
             }
         ],
     };
-
-    console.log(notifMenuProps.items);
 
     // Add a clear all button if there are notifications
     if (notifications.length > 0) {

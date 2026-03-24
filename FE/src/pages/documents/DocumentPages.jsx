@@ -34,7 +34,7 @@ import {
     Popconfirm,
     App
 } from "antd";
-import { documentService, categoryService, userService } from "../../services";
+import { documentService, categoryService } from "../../services";
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -52,10 +52,10 @@ const DocumentApprovals = () => {
 
     // Fetch documents and categories on component mount
 
-    const fetchPendingDocuments = useCallback(async () => {
+    const fetchPendingDocuments = useCallback(async (searchTerm = "") => {
         setLoading(true);
         try {
-            const response = await documentService.getAllDocuments({ status: 'pending' });
+            const response = await documentService.getAllDocuments({ status: 'pending', search: searchTerm });
             setDocuments(response.data || []);
         } catch (error) {
             console.error('Fetch documents error:', error);
@@ -305,7 +305,10 @@ const DocumentApprovals = () => {
                         enterButton={<SearchOutlined />}
                         size="middle"
                         onSearch={handleSearch}
-                        onChange={(e) => setSearchText(e.target.value)}
+                        onChange={(e) => {
+                            setSearchText(e.target.value);
+                            fetchPendingDocuments(e.target.value);
+                        }}
                         style={{ width: 400 }}
                     />
                 </div>

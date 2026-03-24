@@ -42,13 +42,14 @@ const https = require('https');
  */
 const getAllDocuments = async (req, res) => {
   try {
+    console.log(req.query);
     const filters = {
       search: req.query.search,
       status: req.query.status,
       category_id: req.query.category_id,
       department_id: req.query.department_id,
       limit: req.query.limit,
-      offset: req.query.offset
+      offset: req.query.offset,
     };
 
     // Check user roles
@@ -622,6 +623,8 @@ const getDocumentStats = async (req, res) => {
  */
 const getMyDocuments = async (req, res) => {
   try {
+    console.log("user", req.user)
+    console.log("query", req.query);
     const filters = {
       uploaded_by: req.user.userId,
       status: req.query.status,

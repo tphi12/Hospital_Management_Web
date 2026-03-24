@@ -14,8 +14,8 @@ export const documentService = {
   },
 
   // Lấy documents của user hiện tại
-  getMyDocuments: async () => {
-    const response = await api.get('/documents/my');
+  getMyDocuments: async (params = {}) => {
+    const response = await api.get('/documents/my', { params });
     return response.data;
   },
 

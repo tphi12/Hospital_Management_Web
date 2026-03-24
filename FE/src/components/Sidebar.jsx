@@ -10,6 +10,7 @@ import {
     BookOpenCheck,
     CalendarDays,
     CalendarRange,
+    Folder,
 } from "lucide-react";
 import { Menu, Spin } from "antd";
 import hospitalLogoLarge from "../assets/hospital-logo-large.png";
@@ -58,6 +59,12 @@ const MENU_CONFIG = [
                 icon: <Upload size={18} />,
                 allowedRoles: [ROLES.ADMIN, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.STAFF, ROLES.HOSPITAL_CLERK],
             },
+            {
+                label: "Tài liệu của tôi",
+                path: "/documents/my",
+                icon: <Folder size={18} />,
+                allowedRoles: [ROLES.ADMIN, ROLES.HOSPITAL_CLERK, ROLES.HEAD_OF_DEPT, ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.KHTH],
+            }
         ],
     },
     {

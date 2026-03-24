@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useContext } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     SearchOutlined,
     EyeOutlined,
@@ -34,14 +34,12 @@ import {
     App
 } from "antd";
 import { documentService, categoryService } from "../../services";
-import { AuthContext } from "../../context/Context";
 
 const { Title, Text } = Typography;
 const { Search } = Input;
 
-const DocumentList = () => {
+const MyDocument = () => {
     const { message: messageApi } = App.useApp();
-    const { user } = useContext(AuthContext);
     const [documents, setDocuments] = useState([]);
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -55,7 +53,7 @@ const DocumentList = () => {
     const fetchDocuments = useCallback(async (searchTerm = "") => {
         setLoading(true);
         try {
-            const response = await documentService.getAllDocuments({ search: searchTerm });
+            const response = await documentService.getMyDocuments({ search: searchTerm });
             setDocuments(response.data || []);
         } catch (error) {
             console.error('Fetch documents error:', error);
@@ -84,6 +82,12 @@ const DocumentList = () => {
     const handleView = (doc) => {
         setCurrentDoc(doc);
         setIsViewModalOpen(true);
+    };
+
+    const handleEdit = (doc) => {
+        setCurrentDoc(doc);
+        form.setFieldsValue(doc);
+        setIsEditModalOpen(true);
     };
 
     const handleUpdate = async () => {
@@ -214,12 +218,6 @@ const DocumentList = () => {
         }
     };
 
-    const isAdmin = (user) => {
-        return user?.roles?.some(role => role.role_code === 'ADMIN') || false;
-    }
-
-    const allowed = isAdmin(user);
-
     const columns = [
         {
             title: 'Tài liệu',
@@ -274,42 +272,44 @@ const DocumentList = () => {
                     <Tooltip title="Xem chi tiết">
                         <Button type="text" icon={<EyeOutlined />} className="text-blue-500" onClick={() => handleView(record)} />
                     </Tooltip>
+                    <Tooltip title="Chỉnh sửa">
+                        <Button type="text" icon={<EditOutlined />} className="text-orange-500" onClick={() => handleEdit(record)} />
+                    </Tooltip>
                     <Tooltip title="Tải xuống">
                         <Button type="text" icon={<DownloadOutlined />} className="text-green-600" onClick={() => handleDownload(record)} />
                     </Tooltip>
-                    {allowed && (
-                        <Popconfirm
-                            title="Xóa tài liệu"
-                            description="Bạn có chắc chắn muốn xóa tài liệu này?"
-                            onConfirm={() => handleDelete(record.document_id)}
-                            okText="Xóa"
-                            cancelText="Hủy"
-                            okButtonProps={{ danger: true }}
-                        >
-                            <Tooltip title="Xóa">
-                                <Button type="text" icon={<DeleteOutlined />} className="text-red-500" />
-                            </Tooltip>
-                        </Popconfirm>
-                    )}
+                    <Popconfirm
+                        title="Xóa tài liệu"
+                        description="Bạn có chắc chắn muốn xóa tài liệu này?"
+                        onConfirm={() => handleDelete(record.document_id)}
+                        okText="Xóa"
+                        cancelText="Hủy"
+                        okButtonProps={{ danger: true }}
+                    >
+                        <Tooltip title="Xóa">
+                            <Button type="text" icon={<DeleteOutlined />} className="text-red-500" />
+                        </Tooltip>
+                    </Popconfirm>
                 </Space>
             ),
         },
     ];
 
+    
     return (
         <div className="space-y-4 h-[calc(100vh-80px)] flex flex-col">
             <Breadcrumb
                 items={[
                     { title: 'Trang chủ' },
                     { title: 'Tài liệu' },
-                    { title: <span className="font-bold">Danh sách</span> },
+                    { title: <span className="font-bold">Tài liệu của tôi</span> },
                 ]}
             />
 
             <div className="flex justify-between items-center">
                 <div>
                     <Title level={2} style={{ margin: 0 }}>Danh sách tài liệu</Title>
-                    <Text type="secondary">Quản lý và tra cứu tài liệu từ các khoa phòng.</Text>
+                    <Text type="secondary">Quản lý và tra cứu tài liệu của tôi</Text>
                 </div>
             </div>
 
@@ -416,4 +416,4 @@ const DocumentList = () => {
     );
 };
 
-export default DocumentList;
+export default MyDocument;
