@@ -27,10 +27,11 @@ CREATE TABLE IF NOT EXISTS SCHEDULE (
     -- Indexes
     INDEX idx_schedule_type (schedule_type),
     INDEX idx_week_year (week, year),
-    INDEX idx_week_year_type (week, year, schedule_type) COMMENT 'Composite index for filtering by week, year, and type',
     INDEX idx_status (status),
     INDEX idx_department_id (department_id),
-    INDEX idx_created_by (created_by),
+    INDEX created_by (created_by),
+    INDEX source_department_id (source_department_id),
+    INDEX owner_department_id (owner_department_id),
     
     -- Constraints
     UNIQUE KEY unique_schedule (schedule_type, department_id, week, year) COMMENT 'Prevent duplicate schedules',
@@ -59,8 +60,7 @@ CREATE TABLE IF NOT EXISTS SHIFT (
     INDEX idx_schedule_id (schedule_id),
     INDEX idx_shift_date (shift_date),
     INDEX idx_shift_type (shift_type),
-    INDEX idx_department_id (department_id),
-    INDEX idx_date_type (shift_date, shift_type) COMMENT 'For querying shifts by date and type',
+    INDEX department_id (department_id),
     
     -- Constraints
     CONSTRAINT chk_max_staff CHECK (max_staff > 0 AND max_staff <= 100)
@@ -84,11 +84,8 @@ CREATE TABLE IF NOT EXISTS SHIFT_ASSIGNMENT (
     INDEX idx_shift_id (shift_id),
     INDEX idx_user_id (user_id),
     INDEX idx_status (status),
-    INDEX idx_user_status (user_id, status) COMMENT 'For querying user assignments by status',
-    INDEX idx_assigned_at (assigned_at),
-    
+
     -- Constraints
-    UNIQUE KEY unique_active_assignment (shift_id, user_id, status) COMMENT 'Prevent duplicate active assignments',
     CHECK (status IN ('assigned', 'swapped', 'canceled'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT='Stores assignments of users to shifts';

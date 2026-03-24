@@ -77,6 +77,9 @@ const users = {
   // Plain staff in owner dept — no role assignment
   staffInOwner: makeUser(41, OWNER_DEPT, []),
 
+  // STAFF role in owner dept — valid KHTH operator
+  staffRoleInOwner: makeUser(43, OWNER_DEPT, [makeRole('STAFF', OWNER_DEPT)]),
+
   // Plain staff in an unrelated dept — no role assignment
   staffInOther: makeUser(42, OTHER_DEPT, [])
 };
@@ -159,59 +162,59 @@ describe('SchedulePermissionService.canView', () => {
 //   submitted | approved → MANAGER + scope=dept + dept=owner + user.dept=owner
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('SchedulePermissionService.canEdit', () => {
+describe('SchedulePermissionService.canUpdate', () => {
   describe('STATUS = draft — only CLERK in source department', () => {
     it('CLERK in source dept CAN edit draft (all four factors match)', () => {
-      expect(SchedulePermissionService.canEdit(users.clerkInSource, schedules.draft)).toBe(true);
+      expect(SchedulePermissionService.canUpdate(users.clerkInSource, schedules.draft)).toBe(true);
     });
 
     it('CLERK with role scoped to wrong dept CANNOT edit draft (scope mismatch)', () => {
       // user.department_id = SOURCE_DEPT but role.department_id = OTHER_DEPT
-      expect(SchedulePermissionService.canEdit(users.clerkScopeMismatch, schedules.draft)).toBe(false);
+      expect(SchedulePermissionService.canUpdate(users.clerkScopeMismatch, schedules.draft)).toBe(false);
     });
 
     it('MANAGER in source dept CANNOT edit draft (wrong role for draft status)', () => {
-      expect(SchedulePermissionService.canEdit(users.managerInSource, schedules.draft)).toBe(false);
+      expect(SchedulePermissionService.canUpdate(users.managerInSource, schedules.draft)).toBe(false);
     });
 
     it('CLERK in owner dept CANNOT edit draft (wrong department)', () => {
-      expect(SchedulePermissionService.canEdit(users.clerkInOwner, schedules.draft)).toBe(false);
+      expect(SchedulePermissionService.canUpdate(users.clerkInOwner, schedules.draft)).toBe(false);
     });
 
     it('plain staff in source dept CANNOT edit draft (no role)', () => {
-      expect(SchedulePermissionService.canEdit(users.staffInSource, schedules.draft)).toBe(false);
+      expect(SchedulePermissionService.canUpdate(users.staffInSource, schedules.draft)).toBe(false);
     });
   });
 
-  describe('STATUS = submitted — only MANAGER in owner department', () => {
-    it('MANAGER in owner dept CAN edit submitted schedule (all four factors match)', () => {
-      expect(SchedulePermissionService.canEdit(users.managerInOwner, schedules.submitted)).toBe(true);
+  describe('STATUS = submitted — KHTH manager may adjust before publish', () => {
+    it('MANAGER in owner dept CAN edit submitted schedule', () => {
+      expect(SchedulePermissionService.canUpdate(users.managerInOwner, schedules.submitted)).toBe(true);
     });
 
     it('CLERK in source dept CANNOT edit submitted (status no longer draft)', () => {
-      expect(SchedulePermissionService.canEdit(users.clerkInSource, schedules.submitted)).toBe(false);
+      expect(SchedulePermissionService.canUpdate(users.clerkInSource, schedules.submitted)).toBe(false);
     });
 
     it('CLERK in owner dept CANNOT edit submitted (wrong role)', () => {
-      expect(SchedulePermissionService.canEdit(users.clerkInOwner, schedules.submitted)).toBe(false);
+      expect(SchedulePermissionService.canUpdate(users.clerkInOwner, schedules.submitted)).toBe(false);
     });
 
     it('MANAGER in source dept CANNOT edit submitted (wrong department)', () => {
-      expect(SchedulePermissionService.canEdit(users.managerInSource, schedules.submitted)).toBe(false);
+      expect(SchedulePermissionService.canUpdate(users.managerInSource, schedules.submitted)).toBe(false);
     });
 
     it('MANAGER in unrelated dept CANNOT edit submitted (not owner)', () => {
-      expect(SchedulePermissionService.canEdit(users.managerInOther, schedules.submitted)).toBe(false);
+      expect(SchedulePermissionService.canUpdate(users.managerInOther, schedules.submitted)).toBe(false);
     });
   });
 
   describe('STATUS = approved — owner MANAGER retains edit access', () => {
     it('MANAGER in owner dept CAN edit approved schedule (KHTH may correct post-approval)', () => {
-      expect(SchedulePermissionService.canEdit(users.managerInOwner, schedules.approved)).toBe(true);
+      expect(SchedulePermissionService.canUpdate(users.managerInOwner, schedules.approved)).toBe(true);
     });
 
     it('CLERK in source dept CANNOT edit approved schedule', () => {
-      expect(SchedulePermissionService.canEdit(users.clerkInSource, schedules.approved)).toBe(false);
+      expect(SchedulePermissionService.canUpdate(users.clerkInSource, schedules.approved)).toBe(false);
     });
   });
 });
@@ -286,12 +289,15 @@ describe('SchedulePermissionService.canApprove', () => {
       expect(SchedulePermissionService.canApprove(users.managerInOther, schedules.submitted)).toBe(false);
     });
 
-    it('hospital ADMIN CANNOT approve via hospital-scope role alone (admin role is not MANAGER)', () => {
-      // Approval requires ROLE=MANAGER + SCOPE=department + dept=owner — not role=ADMIN
-      expect(SchedulePermissionService.canApprove(users.adminHospital, schedules.submitted)).toBe(false);
+    it('hospital ADMIN CAN approve as an override', () => {
+      expect(SchedulePermissionService.canApprove(users.adminHospital, schedules.submitted)).toBe(true);
     });
 
-    it('plain staff in owner dept CANNOT approve (no MANAGER role)', () => {
+    it('STAFF in owner dept CAN approve submitted schedule (KHTH staff acts like operator)', () => {
+      expect(SchedulePermissionService.canApprove(users.staffRoleInOwner, schedules.submitted)).toBe(true);
+    });
+
+    it('plain staff in owner dept CANNOT approve without a scoped STAFF or MANAGER role', () => {
       expect(SchedulePermissionService.canApprove(users.staffInOwner, schedules.submitted)).toBe(false);
     });
   });
@@ -304,5 +310,24 @@ describe('SchedulePermissionService.canApprove', () => {
     it('MANAGER in owner dept CANNOT re-approve an already-approved schedule', () => {
       expect(SchedulePermissionService.canApprove(users.managerInOwner, schedules.approved)).toBe(false);
     });
+  });
+});
+
+describe('SchedulePermissionService.canApprove for weekly work draft', () => {
+  const weeklyDraft = {
+    ...schedules.draft,
+    schedule_type: 'weekly_work',
+  };
+
+  it('MANAGER in owner dept CAN publish a weekly work draft', () => {
+    expect(SchedulePermissionService.canApprove(users.managerInOwner, weeklyDraft)).toBe(true);
+  });
+
+  it('STAFF in owner dept CAN publish a weekly work draft', () => {
+    expect(SchedulePermissionService.canApprove(users.staffRoleInOwner, weeklyDraft)).toBe(true);
+  });
+
+  it('staff without scoped KHTH role CANNOT publish a weekly work draft', () => {
+    expect(SchedulePermissionService.canApprove(users.staffInOwner, weeklyDraft)).toBe(false);
   });
 });

@@ -2,15 +2,15 @@ const { pool } = require('../config/database');
 const bcrypt = require('bcryptjs');
 
 class User {
-  static async create(userData) {
+  static async create(userData, db = pool) {
     const {
       full_name, email, password, phone, username, employee_code,
       department_id, gender, date_of_birth
     } = userData;
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    const [result] = await pool.execute(
+    
+    const [result] = await db.execute(
       `INSERT INTO USER (full_name, email, password_hash, phone, username, 
                          employee_code, department_id, gender, date_of_birth, 
                          status, created_at, updated_at)

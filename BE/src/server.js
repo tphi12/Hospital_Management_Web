@@ -21,6 +21,7 @@ const scheduleRoutes = require('./routes/scheduleRoutes');
 const shiftRoutes = require('./routes/shiftRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const { Server } = require('socket.io');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 // Initialize http
 const app = express();
@@ -106,6 +107,7 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/schedules', scheduleRoutes);
 app.use('/api/shifts', shiftRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {

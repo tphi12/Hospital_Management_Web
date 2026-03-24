@@ -1,3 +1,6 @@
+const Schedule = require('../models/Schedule');
+const SchedulePermissionService = require('../services/SchedulePermissionService');
+
 /**
  * Authorization middleware - Kiểm tra quyền dựa trên ROLE + SCOPE + ENTITY + STATUS + OWNERSHIP
  */
@@ -247,36 +250,40 @@ const checkDocumentPermission = (action) => {
 const checkSchedulePermission = (action) => {
   return async (req, res, next) => {
     try {
-      const userRoles = req.user.roles || [];
-      const departmentId = req.user.department_id;
-      
-      // Admin has full access
-      const isAdmin = userRoles.some(role => role.role_code === 'ADMIN');
-      if (isAdmin) {
-        req.hasFullAccess = true;
+      if (action === 'create') {
         return next();
       }
-      
-      // Department clerk can create/edit draft schedules for their department
-      const isDeptClerk = userRoles.some(role => 
-        role.role_code === 'CLERK' && 
-        role.scope_type === 'department' &&
-        role.department_id === departmentId
-      );
-      
-      if (action === 'create' && isDeptClerk) {
-        return next();
+
+      const scheduleId = Number(req.params.id);
+      if (Number.isNaN(scheduleId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID l???ch kh??ng h???p l???'
+        });
       }
-      
-      // KHTH clerk can manage all schedules
-      // This will be verified in controller by checking department type
-      req.requireKHTH = true;
+
+      const schedule = await Schedule.findById(scheduleId);
+      if (!schedule) {
+        return res.status(404).json({
+          success: false,
+          message: 'Kh??ng t??m th???y l???ch'
+        });
+      }
+
+      if (action === 'edit' && !SchedulePermissionService.canUpdate(req.user, schedule)) {
+        return res.status(403).json({
+          success: false,
+          message: 'B???n kh??ng c?? quy???n ch???nh s???a l???ch n??y'
+        });
+      }
+
+      req.schedule = schedule;
       next();
     } catch (error) {
       console.error('Check schedule permission error:', error);
       res.status(500).json({
         success: false,
-        message: 'Lỗi kiểm tra quyền lịch',
+        message: 'L???i ki???m tra quy???n l???ch',
         error: error.message
       });
     }

@@ -26,7 +26,8 @@ import {
     SearchOutlined,
     UserOutlined,
     CheckCircleOutlined,
-    CloseCircleOutlined
+    CloseCircleOutlined,
+    KeyOutlined
 } from "@ant-design/icons";
 import { ROLES, ROLE_DETAILS } from "../../lib/roles";
 import { userService, departmentService, roleService } from "../../services";
@@ -41,7 +42,10 @@ const UserManagement = () => {
     const [searchText, setSearchText] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const [passwordChangeUser, setPasswordChangeUser] = useState(null);
     const [form] = Form.useForm();
+    const [passwordForm] = Form.useForm();
 
     // Fetch initial data
     useEffect(() => {
@@ -175,6 +179,27 @@ const UserManagement = () => {
         setIsModalOpen(true);
     };
 
+    const handleOpenPasswordModal = (record) => {
+        setPasswordChangeUser(record);
+        passwordForm.resetFields();
+        setIsPasswordModalOpen(true);
+    };
+
+    const handlePasswordSubmit = async () => {
+        try {
+            const values = await passwordForm.validateFields();
+            const userId = passwordChangeUser.id || passwordChangeUser.user_id;
+            
+            await userService.resetPassword(userId, values.newPassword);
+            message.success('Đổi mật khẩu người dùng thành công');
+            setIsPasswordModalOpen(false);
+        } catch (error) {
+            if (error.response) {
+                message.error(error.response?.data?.message || 'Có lỗi xảy ra khi đổi mật khẩu');
+            }
+        }
+    };
+
     const handleOk = async () => {
         try {
             const values = await form.validateFields();
@@ -288,6 +313,9 @@ const UserManagement = () => {
             align: 'center',
             render: (_, record) => (
                 <Space size="small">
+                    <Tooltip title="Đổi mật khẩu">
+                        <Button type="text" icon={<KeyOutlined className="text-amber-500" />} onClick={() => handleOpenPasswordModal(record)} />
+                    </Tooltip>
                     <Tooltip title="Chỉnh sửa">
                         <Button type="text" icon={<EditOutlined className="text-blue-500" />} onClick={() => handleEdit(record)} />
                     </Tooltip>
@@ -322,15 +350,15 @@ const UserManagement = () => {
             </div>
 
             <Card variant="borderless" className="shadow-sm">
-                <div className="mb-4 flex justify-between">
-                    <Input
-                        prefix={<SearchOutlined className="text-slate-400" />}
+                <div className="mb-4 flex justify-between items-center p-4 border-b border-slate-100">
+                    <Input.Search
                         placeholder="Tìm kiếm theo tên, email..."
-                        className="w-full max-w-md"
+                        allowClear
+                        enterButton={<SearchOutlined />}
+                        size="middle"
                         value={searchText}
                         onChange={handleSearch}
-                        allowClear
-                        size="large"
+                        style={{ width: 400 }}
                     />
                 </div>
                 <Spin spinning={loading}>
@@ -470,6 +498,58 @@ const UserManagement = () => {
                         </Select>
                     </Form.Item>
 
+                </Form>
+            </Modal>
+
+            <Modal
+                title={
+                    <div className="flex items-center gap-2 text-lg">
+                        <KeyOutlined className="text-amber-500" />
+                        <span>Cấp lại mật khẩu cho {passwordChangeUser?.name || passwordChangeUser?.full_name}</span>
+                    </div>
+                }
+                open={isPasswordModalOpen}
+                onOk={handlePasswordSubmit}
+                onCancel={() => setIsPasswordModalOpen(false)}
+                okText="Đổi mật khẩu"
+                cancelText="Hủy"
+                width={500}
+                centered
+                maskClosable={false}
+            >
+                <Form
+                    form={passwordForm}
+                    layout="vertical"
+                    className="mt-4"
+                >
+                    <Form.Item
+                        name="newPassword"
+                        label="Mật khẩu mới"
+                        rules={[
+                            { required: true, message: 'Vui lòng nhập mật khẩu mới' },
+                            { min: 6, message: 'Mật khẩu phải có ít nhất 6 ký tự' }
+                        ]}
+                    >
+                        <Input.Password placeholder="Nhập mật khẩu mới..." />
+                    </Form.Item>
+                    <Form.Item
+                        name="confirmNewPassword"
+                        label="Xác nhận mật khẩu mới"
+                        dependencies={['newPassword']}
+                        rules={[
+                            { required: true, message: 'Vui lòng xác nhận mật khẩu mới' },
+                            ({ getFieldValue }) => ({
+                                validator(_, value) {
+                                    if (!value || getFieldValue('newPassword') === value) {
+                                        return Promise.resolve();
+                                    }
+                                    return Promise.reject(new Error('Mật khẩu không khớp!'));
+                                },
+                            }),
+                        ]}
+                    >
+                        <Input.Password placeholder="Nhập lại mật khẩu mới..." />
+                    </Form.Item>
                 </Form>
             </Modal>
         </div>

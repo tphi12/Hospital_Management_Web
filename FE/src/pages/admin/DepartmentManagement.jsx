@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
 import {
-    Table, Button, Input, Modal, Form, Select, Tag, Space, Tooltip, message, Card, Breadcrumb, Spin
+    Table, Button, Input, Modal, Form, Select, Tag, Space, Tooltip, message, Card, Breadcrumb, Spin, Avatar, List, Popconfirm, Typography
 } from "antd";
 import {
     PlusOutlined, EditOutlined, DeleteOutlined,
-    TeamOutlined, SearchOutlined, EnvironmentOutlined,
-    BankOutlined, MedicineBoxOutlined, FileTextOutlined,
-    InfoCircleOutlined, UserAddOutlined
+    TeamOutlined, SearchOutlined,
+    BankOutlined, UserAddOutlined, UserDeleteOutlined, UserOutlined
 } from "@ant-design/icons";
 import { departmentService, userService } from "../../services";
+
+const { Text } = Typography;
 
 const DepartmentManagement = () => {
     const [departments, setDepartments] = useState([]);
@@ -18,6 +19,15 @@ const DepartmentManagement = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingDept, setEditingDept] = useState(null);
     const [form] = Form.useForm();
+
+    // Members Modal state
+    const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
+    const [selectedDept, setSelectedDept] = useState(null);
+    const [members, setMembers] = useState([]);
+    const [membersLoading, setMembersLoading] = useState(false);
+    const [addMemberVisible, setAddMemberVisible] = useState(false);
+    const [selectedUserId, setSelectedUserId] = useState(null);
+    const [addingMember, setAddingMember] = useState(false);
 
     useEffect(() => {
         fetchDepartments();
@@ -36,11 +46,8 @@ const DepartmentManagement = () => {
                     name: d.name || d.department_name || 'Chưa cập nhật',
                     department_code: d.department_code,
                     department_type: d.department_type,
-                    // Map backend manager_name to head for display
                     head: d.head || (d.manager_name ? { name: d.manager_name, email: d.manager_email } : null),
-                    // Map description fallbacks
                     description: d.description || d.department_description || '',
-                    // updated_at already exists; keep as-is
                 }))
                 : [];
             setDepartments(mapped);
@@ -66,6 +73,56 @@ const DepartmentManagement = () => {
             setUsers(mapped);
         } catch (error) {
             console.error("Failed to fetch users:", error);
+        }
+    };
+
+    const fetchMembers = async (deptId) => {
+        setMembersLoading(true);
+        try {
+            const response = await departmentService.getDepartmentMembers(deptId);
+            setMembers(response.data || []);
+        } catch (error) {
+            console.error("Failed to fetch members:", error);
+            message.error("Không thể tải danh sách thành viên");
+        } finally {
+            setMembersLoading(false);
+        }
+    };
+
+    const handleOpenMembers = (record) => {
+        setSelectedDept(record);
+        setIsMembersModalOpen(true);
+        fetchMembers(record.id);
+    };
+
+    const handleAddMember = async () => {
+        if (!selectedUserId) {
+            message.warning("Vui lòng chọn thành viên");
+            return;
+        }
+        setAddingMember(true);
+        try {
+            await departmentService.addMemberToDepartment(selectedDept.id, selectedUserId);
+            message.success("Thêm thành viên thành công!");
+            setSelectedUserId(null);
+            setAddMemberVisible(false);
+            fetchMembers(selectedDept.id);
+            fetchDepartments(); // refresh member count
+        } catch (error) {
+            message.error(error.response?.data?.message || "Thêm thành viên thất bại");
+        } finally {
+            setAddingMember(false);
+        }
+    };
+
+    const handleRemoveMember = async (userId) => {
+        try {
+            await departmentService.removeMemberFromDepartment(selectedDept.id, userId);
+            message.success("Đã xóa thành viên khỏi phòng ban");
+            fetchMembers(selectedDept.id);
+            fetchDepartments();
+        } catch (error) {
+            message.error(error.response?.data?.message || "Xóa thành viên thất bại");
         }
     };
 
@@ -110,8 +167,6 @@ const DepartmentManagement = () => {
     const handleOk = async () => {
         try {
             const values = await form.validateFields();
-
-            // Map form -> backend fields (department_code, department_name, department_type, description)
             const department_code = values.department_code
                 || editingDept?.department_code
                 || (values.name ? values.name.trim().toUpperCase().replace(/\s+/g, '_') : 'DEPT');
@@ -120,6 +175,7 @@ const DepartmentManagement = () => {
                 department_name: values.name,
                 department_type: values.department_type || editingDept?.department_type || 'simple',
                 description: values.description || '',
+                head_id: values.head_id || null,
             };
 
             if (editingDept) {
@@ -139,6 +195,11 @@ const DepartmentManagement = () => {
         }
     };
 
+    // Users already not in this department
+    const availableUsers = users.filter(u =>
+        !members.some(m => m.user_id === u.id || m.user_id === u.user_id)
+    );
+
     const columns = [
         {
             title: 'Tên Phòng Ban',
@@ -151,11 +212,20 @@ const DepartmentManagement = () => {
                     </div>
                     <div>
                         <div className="font-medium text-slate-900">{text}</div>
-                        <div className="text-xs text-slate-500 flex items-center gap-1">
-                            <EnvironmentOutlined /> {record.location || 'Chưa cập nhật'}
-                        </div>
+                        <div className="text-xs text-slate-500">{record.department_code}</div>
                     </div>
                 </Space>
+            ),
+        },
+        {
+            title: 'Thành viên',
+            dataIndex: 'member_count',
+            key: 'member_count',
+            align: 'center',
+            render: (count) => (
+                <Tag color="blue" icon={<TeamOutlined />}>
+                    {count || 0} người
+                </Tag>
             ),
         },
         {
@@ -189,8 +259,8 @@ const DepartmentManagement = () => {
                     <Tooltip title="Chỉnh sửa">
                         <Button type="text" icon={<EditOutlined className="text-blue-600" />} onClick={() => handleEdit(record)} />
                     </Tooltip>
-                    <Tooltip title="Xem thành viên">
-                        <Button type="text" icon={<TeamOutlined className="text-green-600" />} />
+                    <Tooltip title="Xem & Quản lý thành viên">
+                        <Button type="text" icon={<TeamOutlined className="text-green-600" />} onClick={() => handleOpenMembers(record)} />
                     </Tooltip>
                     <Tooltip title="Xóa">
                         <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} />
@@ -206,7 +276,6 @@ const DepartmentManagement = () => {
 
     return (
         <div className="space-y-4">
-            {/* Breadcrumb - Optional if Navbar handles it, but good for context */}
             <Breadcrumb
                 items={[
                     { title: 'Trang chủ' },
@@ -237,7 +306,6 @@ const DepartmentManagement = () => {
                     <Table
                         columns={columns}
                         dataSource={filteredData}
-                        // Provide stable fallback keys to avoid React key warnings
                         rowKey={(record) => record.id || record.department_id || record.name || `dept-${record.location || ''}`}
                         pagination={{ pageSize: 6, placement: 'bottomRight' }}
                     />
@@ -253,11 +321,7 @@ const DepartmentManagement = () => {
                 okText={editingDept ? "Cập nhật" : "Tạo mới"}
                 cancelText="Hủy"
             >
-                <Form
-                    form={form}
-                    layout="vertical"
-                    className="mt-4"
-                >
+                <Form form={form} layout="vertical" className="mt-4">
                     <Form.Item
                         name="name"
                         label="Tên phòng ban"
@@ -266,17 +330,11 @@ const DepartmentManagement = () => {
                         <Input placeholder="Ví dụ: Khoa Nội Tiết" prefix={<BankOutlined />} />
                     </Form.Item>
 
-                    <Form.Item
-                        name="description"
-                        label="Mô tả"
-                    >
+                    <Form.Item name="description" label="Mô tả">
                         <Input.TextArea placeholder="Mô tả về phòng ban" rows={3} />
                     </Form.Item>
 
-                    <Form.Item
-                        name="location"
-                        label="Địa điểm / Tầng"
-                    >
+                    <Form.Item name="location" label="Địa điểm / Tầng">
                         <Select placeholder="Chọn vị trí">
                             {[1, 2, 3, 4, 5, 6].map(i => (
                                 <Select.Option key={i} value={`Tầng ${i}`}>Tầng {i}</Select.Option>
@@ -287,17 +345,130 @@ const DepartmentManagement = () => {
                     <Form.Item
                         name="head_id"
                         label="Trưởng phòng"
-                        tooltip="Chọn người quản lý phòng ban"
+                        tooltip="Chỉ có thể bổ nhiệm nhân viên đang thuộc phòng ban này."
                     >
-                        <Select placeholder="Chọn quản lý" allowClear showSearch filterOption={(input, option) =>
-                            option.children.toLowerCase().includes(input.toLowerCase())
-                        }>
-                            {users.map(u => (
-                                <Select.Option key={u.id} value={u.id}>{u.name} ({u.email})</Select.Option>
-                            ))}
+                        <Select
+                            placeholder="Chọn quản lý"
+                            allowClear
+                            showSearch
+                            disabled={!editingDept}
+                            filterOption={(input, option) =>
+                                option.children.toLowerCase().includes(input.toLowerCase())
+                            }>
+                            {users
+                                .filter(u => editingDept && u.department_id === editingDept.id)
+                                .map(u => (
+                                    <Select.Option key={u.id} value={u.id}>{u.name} ({u.email})</Select.Option>
+                                ))}
                         </Select>
                     </Form.Item>
                 </Form>
+            </Modal>
+
+            {/* Members Modal */}
+            <Modal
+                title={
+                    <div className="flex items-center gap-2">
+                        <TeamOutlined className="text-green-600" />
+                        <span>Thành viên phòng ban: <strong>{selectedDept?.name}</strong></span>
+                    </div>
+                }
+                open={isMembersModalOpen}
+                onCancel={() => {
+                    setIsMembersModalOpen(false);
+                    setAddMemberVisible(false);
+                    setSelectedUserId(null);
+                }}
+                footer={
+                    <Button
+                        type="primary"
+                        icon={<UserAddOutlined />}
+                        onClick={() => setAddMemberVisible(!addMemberVisible)}
+                    >
+                        {addMemberVisible ? 'Ẩn form' : 'Thêm thành viên'}
+                    </Button>
+                }
+                width={600}
+            >
+                {/* Add Member Form */}
+                {addMemberVisible && (
+                    <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                        <div className="text-sm font-medium text-blue-700 mb-2">Chọn người dùng để thêm vào phòng ban:</div>
+                        <Space.Compact className="w-full">
+                            <Select
+                                placeholder="Tìm kiếm người dùng..."
+                                showSearch
+                                className="w-full"
+                                filterOption={(input, option) =>
+                                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
+                                options={availableUsers.map(u => ({
+                                    value: u.id,
+                                    label: `${u.name} (${u.email})`,
+                                }))}
+                                value={selectedUserId}
+                                onChange={setSelectedUserId}
+                                allowClear
+                            />
+                            <Button
+                                type="primary"
+                                loading={addingMember}
+                                onClick={handleAddMember}
+                            >
+                                Thêm
+                            </Button>
+                        </Space.Compact>
+                    </div>
+                )}
+
+                {/* Members List */}
+                <Spin spinning={membersLoading}>
+                    {members.length === 0 ? (
+                        <div className="text-center py-12 text-slate-400">
+                            <TeamOutlined style={{ fontSize: 36 }} />
+                            <div className="mt-2">Phòng ban chưa có thành viên nào</div>
+                        </div>
+                    ) : (
+                        <List
+                            dataSource={members}
+                            renderItem={(member) => (
+                                <List.Item
+                                    key={member.user_id}
+                                    actions={[
+                                        <Popconfirm
+                                            key="remove"
+                                            title="Xóa thành viên"
+                                            description="Bạn có chắc chắn muốn xóa thành viên này khỏi phòng ban?"
+                                            onConfirm={() => handleRemoveMember(member.user_id)}
+                                            okText="Xóa"
+                                            cancelText="Hủy"
+                                            okButtonProps={{ danger: true }}
+                                        >
+                                            <Tooltip title="Xóa khỏi phòng ban">
+                                                <Button type="text" danger icon={<UserDeleteOutlined />} size="small" />
+                                            </Tooltip>
+                                        </Popconfirm>
+                                    ]}
+                                >
+                                    <List.Item.Meta
+                                        avatar={
+                                            <Avatar icon={<UserOutlined />} className="bg-blue-500">
+                                                {member.full_name?.charAt(0)}
+                                            </Avatar>
+                                        }
+                                        title={<span className="font-medium">{member.full_name}</span>}
+                                        description={
+                                            <div className="text-xs text-slate-500 space-y-0.5">
+                                                <div>{member.email}</div>
+                                                {member.role_name && <Tag color="blue" className="mt-1">{member.role_name}</Tag>}
+                                            </div>
+                                        }
+                                    />
+                                </List.Item>
+                            )}
+                        />
+                    )}
+                </Spin>
             </Modal>
         </div>
     );

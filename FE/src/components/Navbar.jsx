@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useLocation, Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { useNotifications } from "../hooks/useSocket";
@@ -21,6 +22,38 @@ import { useState } from "react";
 
 const { Header } = Layout;
 
+// Đưa dictionary map tên route ra ngoài component
+const ROUTE_NAMES = {
+    admin: 'Quản trị',
+    users: 'Người dùng',
+    documents: 'Tài liệu',
+    schedule: 'Lịch'
+};
+
+// Đưa menu tĩnh (Demo notification) ra ngoài để không tạo lại mỗi lần render
+const notifMenuProps = {
+    items: [
+        {
+            key: '1',
+            label: (
+                <div className="py-1">
+                    <div className="font-semibold">Tin nhắn mới</div>
+                    <div className="text-xs text-gray-500">Từ Laur • 13 phút trước</div>
+                </div>
+            ),
+        },
+        {
+            key: '2',
+            label: (
+                <div className="py-1">
+                    <div className="font-semibold">Tài liệu mới</div>
+                    <div className="text-xs text-gray-500">Đã tải lên • 1 ngày trước</div>
+                </div>
+            ),
+        },
+    ],
+};
+
 const Navbar = () => {
     const { user, logout } = useAuth();
     const location = useLocation();
@@ -33,21 +66,17 @@ const Navbar = () => {
         token: { colorBgContainer },
     } = theme.useToken();
 
-    // Generate Breadcrumb items based on path
-    const getBreadcrumbItems = () => {
+    // Dùng useMemo để tránh tính toán lại Breadcrumb mỗi khi re-render không cần thiết
+    const breadcrumbItems = useMemo(() => {
         const pathSnippets = location.pathname.split('/').filter(i => i);
         const extraBreadcrumbItems = pathSnippets.map((_, index) => {
             const url = `/${pathSnippets.slice(0, index + 1).join('/')}`;
-            // Simple mapping for demo purposes
-            let title = pathSnippets[index];
-            if (title === 'admin') title = 'Quản trị';
-            if (title === 'users') title = 'Người dùng';
-            if (title === 'documents') title = 'Tài liệu';
-            if (title === 'schedule') title = 'Lịch';
+            const pathName = pathSnippets[index];
+            const title = ROUTE_NAMES[pathName] || (pathName.charAt(0).toUpperCase() + pathName.slice(1));
 
             return {
                 key: url,
-                title: <Link to={url}>{title.charAt(0).toUpperCase() + title.slice(1)}</Link>,
+                title: <Link to={url}>{title}</Link>,
             };
         });
 
@@ -56,11 +85,12 @@ const Navbar = () => {
                 key: '/',
                 title: <Link to="/">Trang chủ</Link>,
             },
-        ].concat(extraBreadcrumbItems);
-    };
+            ...extraBreadcrumbItems
+        ];
+    }, [location.pathname]);
 
-    // User Dropdown Menu
-    const userMenuProps = {
+    // User Dropdown Menu dùng useMemo vì nó có gọi function logout từ hook
+    const userMenuProps = useMemo(() => ({
         items: [
             {
                 key: 'profile',
@@ -83,7 +113,7 @@ const Navbar = () => {
                 onClick: logout,
             },
         ],
-    };
+    }), [logout]);
 
     const getFileIcon = (path) => {
         if (!path) return <FileOutlined className="text-gray-500 text-xl" />;
@@ -239,7 +269,7 @@ const Navbar = () => {
             }}
         >
             {/* Breadcrumb */}
-            <Breadcrumb items={getBreadcrumbItems()} />
+            <Breadcrumb items={breadcrumbItems} />
 
             {/* Right Side Actions */}
             <Space size="large">

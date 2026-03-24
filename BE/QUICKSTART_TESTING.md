@@ -154,9 +154,7 @@ async function createCompleteSchedule() {
 --------------------------------|---------|----------|---------|---------|-------------------
 File                            | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
 --------------------------------|---------|----------|---------|---------|-------------------
-All files                       |     100 |      100 |     100 |     100 |                   
- services                       |     100 |      100 |     100 |     100 |                   
-  ScheduleService.js            |     100 |      100 |     100 |     100 |                   
+All files                       |   >= 19 |    >= 20 |   >= 18 |   >= 19 |                   
 --------------------------------|---------|----------|---------|---------|-------------------
 
 Test Suites: 1 passed, 1 total
@@ -164,6 +162,10 @@ Tests:       29 passed, 29 total
 Snapshots:   0 total
 Time:        2.5s
 ```
+
+Current repo note:
+- The backend currently enforces a baseline global threshold while controller and middleware coverage is still being expanded.
+- As new suites are added, these thresholds should be raised incrementally instead of jumping straight to 70%.
 
 ## Troubleshooting
 

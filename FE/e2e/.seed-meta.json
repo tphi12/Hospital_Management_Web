@@ -1,0 +1,33 @@
+{
+  "baseUrl": "http://127.0.0.1:3000",
+  "password": "E2Epass123!",
+  "users": {
+    "clerk": {
+      "username": "e2e_clerk",
+      "password": "E2Epass123!"
+    },
+    "staff": {
+      "username": "e2e_staff",
+      "password": "E2Epass123!"
+    },
+    "khth": {
+      "username": "e2e_khth",
+      "password": "E2Epass123!"
+    }
+  },
+  "duty": {
+    "week": 12,
+    "year": 2026,
+    "departmentCode": "E2E-SCHED",
+    "departmentName": "Khoa Lich Truc E2E",
+    "scheduleId": 52,
+    "shiftId": 38,
+    "shiftDate": "2026-03-16"
+  },
+  "weekly": {
+    "week": 13,
+    "year": 2026,
+    "scheduleId": 53,
+    "description": "E2E Weekly Work Schedule"
+  }
+}

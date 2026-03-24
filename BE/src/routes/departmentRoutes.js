@@ -16,5 +16,7 @@ router.get('/:id/members', departmentController.getDepartmentMembers);
 router.post('/', checkAdmin, departmentController.createDepartment);
 router.put('/:id', checkAdmin, departmentController.updateDepartment);
 router.delete('/:id', checkAdmin, departmentController.deleteDepartment);
+router.post('/:id/members', checkAdmin, departmentController.addMember);
+router.delete('/:id/members/:userId', checkAdmin, departmentController.removeMember);
 
 module.exports = router;

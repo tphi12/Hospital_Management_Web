@@ -99,81 +99,76 @@ const MENU_CONFIG = [
 ];
 
 const Sidebar = () => {
-    const { user, isLoading } = useAuth();
-    const location = useLocation();
-    const navigate = useNavigate();
+  const { user, isLoading } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
-    if (isLoading) {
-        return (
-            <aside className="w-[260px] bg-white h-screen fixed left-0 top-0 z-50 flex flex-col border-r border-slate-200">
-                <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-100">
-                    <img src={hospitalLogoLarge} alt="Logo" className="w-8 h-8 object-contain" />
-                    <span className="font-bold text-lg text-slate-800 tracking-tight">Thai An Hospital</span>
-                </div>
-                <div className="flex-1 flex items-center justify-center">
-                    <Spin size="small" />
-                </div>
-            </aside>
-        );
+  if (isLoading) {
+    return (
+      <aside className="w-[260px] bg-white h-screen fixed left-0 top-0 z-50 flex flex-col border-r border-slate-200">
+        <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-100">
+          <img src={hospitalLogoLarge} alt="Logo" className="w-8 h-8 object-contain" />
+          <span className="font-bold text-lg text-slate-800 tracking-tight">Thai An Hospital</span>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <Spin size="small" />
+        </div>
+      </aside>
+    );
+  }
+
+  if (!user) return null;
+
+  const roleCodes = getEffectiveRoleCodes(user);
+
+  const canAccessItem = (menuItem) => {
+    const hasAllowedRole = (menuItem.allowedRoles || []).some((role) => roleCodes.has(role));
+    if (!hasAllowedRole) return false;
+    if (menuItem.requireHospitalScope) {
+      return isHospitalScope(user);
+    }
+    return true;
+  };
+
+  const menuItems = MENU_CONFIG.map((group) => {
+    const children = group.items
+      .filter(canAccessItem)
+      .map((item) => ({
+        key: item.path,
+        icon: item.icon,
+        label: item.label,
+      }));
+
+    if (!children.length) {
+      return null;
     }
 
-    if (!user) return null;
-
-    const roleCodes = getEffectiveRoleCodes(user);
-
-    const canAccessItem = (menuItem) => {
-        const hasAllowedRole = (menuItem.allowedRoles || []).some((role) => roleCodes.has(role));
-        if (!hasAllowedRole) return false;
-        if (menuItem.requireHospitalScope) {
-            return isHospitalScope(user);
-        }
-        return true;
+    return {
+      type: "group",
+      label: group.groupLabel,
+      children,
     };
+  }).filter(Boolean);
 
-    const getFilteredItems = (menuGroups) => {
-        return menuGroups.map((group) => {
-            const filteredChildren = group.items
-                .filter(canAccessItem)
-                .map((item) => ({
-                    key: item.path,
-                    icon: item.icon,
-                    label: item.label,
-                }));
+  return (
+    <aside className="w-[260px] bg-white h-screen fixed left-0 top-0 z-50 flex flex-col border-r border-slate-200">
+      <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-100">
+        <img src={hospitalLogoLarge} alt="Logo" className="w-8 h-8 object-contain" />
+        <span className="font-bold text-lg text-slate-800 tracking-tight">Thai An Hospital</span>
+      </div>
 
-            if (filteredChildren.length > 0) {
-                return {
-                    type: 'group',
-                    label: group.groupLabel,
-                    children: filteredChildren,
-                };
-            }
-            return null;
-        }).filter(Boolean);
-    };
-
-    const menuItems = getFilteredItems(MENU_CONFIG);
-
-    return (
-        <aside className="w-[260px] bg-white h-screen fixed left-0 top-0 z-50 flex flex-col border-r border-slate-200">
-            {/* Logo */}
-            <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-100">
-                <img src={hospitalLogoLarge} alt="Logo" className="w-8 h-8 object-contain" />
-                <span className="font-bold text-lg text-slate-800 tracking-tight">Thai An Hospital</span>
-            </div>
-
-            {/* Ant Design Menu */}
-            <div className="flex-1 overflow-y-auto py-4">
-                <Menu
-                    mode="inline"
-                    selectedKeys={[location.pathname]}
-                    items={menuItems}
-                    onClick={({ key }) => navigate(key)}
-                    style={{ borderRight: 0 }}
-                    className="custom-sidebar-menu"
-                />
-            </div>
-        </aside>
-    );
+      <div className="flex-1 overflow-y-auto py-4">
+        <Menu
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          items={menuItems}
+          onClick={({ key }) => navigate(key)}
+          style={{ borderRight: 0 }}
+          className="custom-sidebar-menu"
+        />
+      </div>
+    </aside>
+  );
 };
 
 export default Sidebar;

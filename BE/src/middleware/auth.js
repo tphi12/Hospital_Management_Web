@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Role = require('../models/Role');
+const { pool } = require('../config/database');
 
 const auth = async (req, res, next) => {
   try {
@@ -40,6 +41,18 @@ const auth = async (req, res, next) => {
     // Get user roles
     const userRoles = await Role.getUserRoles(decoded.userId);
     
+    // Get department info including department_type
+    let departmentType = null;
+    if (user.department_id) {
+      const [dept] = await pool.execute(
+        'SELECT department_type FROM DEPARTMENT WHERE department_id = ?',
+        [user.department_id]
+      );
+      if (dept.length > 0) {
+        departmentType = dept[0].department_type;
+      }
+    }
+    
     // Attach user info and roles to request
     req.user = {
       userId: user.user_id,
@@ -47,6 +60,7 @@ const auth = async (req, res, next) => {
       email: user.email,
       full_name: user.full_name,
       department_id: user.department_id,
+      department_type: departmentType,
       roles: userRoles
     };
     

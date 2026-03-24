@@ -47,6 +47,22 @@ export const userService = {
     const response = await api.post(`/users/${userId}/roles`, { role_id: roleId, scope_type, department_id });
     return response.data;
   },
+
+  // Đổi mật khẩu admin
+  resetPassword: async (userId, newPassword) => {
+    const response = await api.patch(`/users/${userId}/password`, { newPassword });
+    return response.data;
+  },
+
+  // Upload avatar
+  uploadAvatar: async (userId, formData) => {
+    const response = await api.post(`/users/${userId}/avatar`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
 };
 
 export default userService;
