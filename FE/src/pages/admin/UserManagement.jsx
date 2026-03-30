@@ -73,6 +73,7 @@ const UserManagement = () => {
                     role: u.role || (u.role_name || u.role_code || u.roles
                         ? { name: u.role_name || u.role_code || u.roles }
                         : null),
+                    role_id: parseInt(u.role_ids || u.role_id, 10) || null,
                 }))
                 : [];
             setUsers(mapped);
@@ -212,12 +213,15 @@ const UserManagement = () => {
                 email: values.email,
                 phone: values.phone,
                 department_id: values.department_id,
+                new_password: values.confirmPassword || null,
                 role_id: values.role_id,
                 scope_type: 'department',
                 employee_code: values.employee_code || null,
                 gender: values.gender || null,
                 date_of_birth: values.date_of_birth || null,
             };
+
+            // console.log(payload);
 
             if (!editingUser) {
                 payload.password = values.password;
@@ -250,10 +254,10 @@ const UserManagement = () => {
             key: 'name',
             render: (text, record) => (
                 <Space>
-                    <Avatar 
-                        src={record.avatar} 
-                        shape="square" 
-                        size="large" 
+                    <Avatar
+                        src={record.avatar}
+                        shape="square"
+                        size="large"
                         icon={<UserOutlined />}
                         style={{ backgroundColor: '#1890ff' }}
                     >
@@ -421,8 +425,8 @@ const UserManagement = () => {
                             </Form.Item>
                         </Col>
                         <Col span={12}>
-                            <Form.Item 
-                                name="department_id" 
+                            <Form.Item
+                                name="department_id"
                                 label="Phòng ban"
                                 rules={[{ required: true, message: 'Vui lòng chọn phòng ban' }]}
                             >
@@ -433,8 +437,8 @@ const UserManagement = () => {
                                 </Select>
                             </Form.Item>
                         </Col>
+                        
                     </Row>
-
                     {!editingUser && (
                         <Row gutter={16}>
                             <Col span={12}>
@@ -443,7 +447,7 @@ const UserManagement = () => {
                                     label="Mật khẩu"
                                     rules={[{ required: true, message: 'Vui lòng nhập mật khẩu' }]}
                                 >
-                                    <Input.Password placeholder="******" />
+                                    <Input.Password placeholder="**" />
                                 </Form.Item>
                             </Col>
                             <Col span={12}>
@@ -463,14 +467,13 @@ const UserManagement = () => {
                                         }),
                                     ]}
                                 >
-                                    <Input.Password placeholder="******" />
+                                    <Input.Password placeholder="**" />
                                 </Form.Item>
                             </Col>
                         </Row>
                     )}
-
-                    <Form.Item 
-                        name="role_id" 
+                    <Form.Item
+                        name="role_id"
                         label="Vai trò hệ thống"
                         rules={[{ required: true, message: 'Vui lòng chọn vai trò' }]}
                     >

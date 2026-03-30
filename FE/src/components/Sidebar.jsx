@@ -1,15 +1,16 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard,
-  Users,
-  FileText,
-  Calendar,
-  Building2,
-  ShieldCheck,
-  Upload,
-  BookOpenCheck,
-  CalendarDays,
-  CalendarRange,
+    LayoutDashboard,
+    Users,
+    FileText,
+    Calendar,
+    Building2,
+    ShieldCheck,
+    Upload,
+    BookOpenCheck,
+    CalendarDays,
+    CalendarRange,
+    Folder,
 } from "lucide-react";
 import { Menu, Spin } from "antd";
 import hospitalLogoLarge from "../assets/hospital-logo-large.png";
@@ -18,77 +19,83 @@ import { getEffectiveRoleCodes, isHospitalScope } from "../lib/roleUtils";
 import { ROLES } from "../lib/roles";
 
 const MENU_CONFIG = [
-  {
-    groupLabel: "TONG QUAN",
-    items: [
-      {
-        label: "Tong quan",
-        path: "/",
-        icon: <LayoutDashboard size={18} />,
-        allowedRoles: [ROLES.ADMIN, ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.HOSPITAL_CLERK, ROLES.KHTH],
-      },
-    ],
-  },
-  {
-    groupLabel: "HE THONG",
-    items: [
-      { label: "Nguoi dung", path: "/admin/users", icon: <Users size={18} />, allowedRoles: [ROLES.ADMIN] },
-      { label: "Phan quyen", path: "/admin/roles", icon: <ShieldCheck size={18} />, allowedRoles: [ROLES.ADMIN] },
-      { label: "Phong ban", path: "/admin/departments", icon: <Building2 size={18} />, allowedRoles: [ROLES.ADMIN] },
-    ],
-  },
-  {
-    groupLabel: "TAI LIEU",
-    items: [
-      {
-        label: "Kho tai lieu",
-        path: "/documents/repository",
-        icon: <FileText size={18} />,
-        allowedRoles: [ROLES.ADMIN, ROLES.HOSPITAL_CLERK, ROLES.HEAD_OF_DEPT, ROLES.STAFF, ROLES.DEPT_CLERK],
-      },
-      {
-        label: "Duyet tai lieu",
-        path: "/documents/approvals",
-        icon: <BookOpenCheck size={18} />,
-        allowedRoles: [ROLES.ADMIN, ROLES.HOSPITAL_CLERK, ROLES.HEAD_OF_DEPT],
-      },
-      {
-        label: "Upload",
-        path: "/documents/upload",
-        icon: <Upload size={18} />,
-        allowedRoles: [ROLES.ADMIN, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.STAFF, ROLES.HOSPITAL_CLERK],
-      },
-    ],
-  },
-  {
-    groupLabel: "LICH",
-    items: [
-      {
-        label: "Lich da cong bo",
-        path: "/schedule/me",
-        icon: <Calendar size={18} />,
-        allowedRoles: [ROLES.ADMIN, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.HOSPITAL_CLERK, ROLES.KHTH, ROLES.STAFF],
-      },
-      {
-        label: "Upload lich truc",
-        path: "/schedule/department",
-        icon: <Upload size={18} />,
-        allowedRoles: [ROLES.DEPT_CLERK, ROLES.ADMIN],
-      },
-      {
-        label: "Duyet lich truc",
-        path: "/schedule/master",
-        icon: <CalendarRange size={18} />,
-        allowedRoles: [ROLES.ADMIN, ROLES.KHTH],
-      },
-      {
-        label: "Lich cong tac tuan",
-        path: "/schedule/weekly",
-        icon: <CalendarDays size={18} />,
-        allowedRoles: [ROLES.ADMIN, ROLES.KHTH],
-      },
-    ],
-  },
+    {
+        groupLabel: "TỔNG QUAN",
+        items: [
+            {
+                label: "Tổng quan",
+                path: "/",
+                icon: <LayoutDashboard size={18} />,
+                allowedRoles: [ROLES.ADMIN, ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.HOSPITAL_CLERK, ROLES.KHTH],
+            },
+        ],
+    },
+    {
+        groupLabel: "HỆ THỐNG",
+        items: [
+            { label: "Người dùng", path: "/admin/users", icon: <Users size={18} />, allowedRoles: [ROLES.ADMIN] },
+            { label: "Phân quyền", path: "/admin/roles", icon: <ShieldCheck size={18} />, allowedRoles: [ROLES.ADMIN] },
+            { label: "Phòng ban", path: "/admin/departments", icon: <Building2 size={18} />, allowedRoles: [ROLES.ADMIN] },
+        ],
+    },
+    {
+        groupLabel: "TÀI LIỆU",
+        items: [
+            {
+                label: "Kho tài liệu",
+                path: "/documents/repository",
+                icon: <FileText size={18} />,
+                allowedRoles: [ROLES.ADMIN, ROLES.HOSPITAL_CLERK, ROLES.HEAD_OF_DEPT, ROLES.STAFF, ROLES.DEPT_CLERK],
+            },
+            {
+                label: "Duyệt tài liệu",
+                path: "/documents/approvals",
+                icon: <BookOpenCheck size={18} />,
+                allowedRoles: [ROLES.ADMIN, ROLES.HOSPITAL_CLERK, ROLES.HEAD_OF_DEPT],
+            },
+            {
+                label: "Upload",
+                path: "/documents/upload",
+                icon: <Upload size={18} />,
+                allowedRoles: [ROLES.ADMIN, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.STAFF, ROLES.HOSPITAL_CLERK],
+            },
+            {
+                label: "Tài liệu của tôi",
+                path: "/documents/my",
+                icon: <Folder size={18} />,
+                allowedRoles: [ROLES.ADMIN, ROLES.HOSPITAL_CLERK, ROLES.HEAD_OF_DEPT, ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.KHTH],
+            }
+        ],
+    },
+    {
+        groupLabel: "LỊCH TRỰC",
+        items: [
+            {
+                label: "Lịch cá nhân",
+                path: "/schedule/me",
+                icon: <Calendar size={18} />,
+                allowedRoles: [ROLES.ADMIN, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.HOSPITAL_CLERK, ROLES.KHTH, ROLES.STAFF],
+            },
+            {
+                label: "Upload lịch trực",
+                path: "/schedule/department",
+                icon: <Upload size={18} />,
+                allowedRoles: [ROLES.DEPT_CLERK],
+            },
+            {
+                label: "Lịch công tác tuần",
+                path: "/schedule/weekly",
+                icon: <CalendarDays size={18} />,
+                allowedRoles: [ROLES.KHTH],
+            },
+            {
+                label: "Toàn viện",
+                path: "/schedule/master",
+                icon: <CalendarRange size={18} />,
+                allowedRoles: [ROLES.ADMIN, ROLES.KHTH],
+            },
+        ],
+    },
 ];
 
 const Sidebar = () => {
