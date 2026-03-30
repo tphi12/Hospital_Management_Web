@@ -55,7 +55,7 @@ const DocumentList = () => {
     const fetchDocuments = useCallback(async (searchTerm = "") => {
         setLoading(true);
         try {
-            const response = await documentService.getAllDocuments({ search: searchTerm });
+            const response = await documentService.getAllDocuments({ status: 'approved', search: searchTerm });
             setDocuments(response.data || []);
         } catch (error) {
             console.error('Fetch documents error:', error);

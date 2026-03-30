@@ -29,7 +29,7 @@ class Document {
       LEFT JOIN DEPARTMENT dep ON d.department_id = dep.department_id
       LEFT JOIN USER u ON d.uploaded_by = u.user_id
       LEFT JOIN USER approver ON d.approved_by = approver.user_id
-      WHERE d.deleted_at IS NULL
+      WHERE d.deleted_at IS NULL 
     `;
     
     const params = [];

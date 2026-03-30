@@ -437,27 +437,17 @@ const UserManagement = () => {
                                 </Select>
                             </Form.Item>
                         </Col>
+                        
                     </Row>
-
-                    {editingUser && (
+                    {!editingUser && (
                         <Row gutter={16}>
                             <Col span={12}>
                                 <Form.Item
                                     name="password"
                                     label="Mật khẩu"
-                                    dependencies={['confirmPassword']}
-                                    rules={[
-                                        ({ getFieldValue }) => ({
-                                            validator(_, value) {
-                                                if (getFieldValue('confirmPassword') && !value) {
-                                                    return Promise.reject(new Error('Vui lòng nhập mật khẩu!'));
-                                                }
-                                                return Promise.resolve();
-                                            },
-                                        }),
-                                    ]}
+                                    rules={[{ required: true, message: 'Vui lòng nhập mật khẩu' }]}
                                 >
-                                    <Input.Password placeholder="******" />
+                                    <Input.Password placeholder="**" />
                                 </Form.Item>
                             </Col>
                             <Col span={12}>
@@ -466,26 +456,22 @@ const UserManagement = () => {
                                     label="Xác nhận mật khẩu"
                                     dependencies={['password']}
                                     rules={[
+                                        { required: true, message: 'Vui lòng xác nhận mật khẩu' },
                                         ({ getFieldValue }) => ({
                                             validator(_, value) {
-                                                const password = getFieldValue('password');
-                                                if (password && !value) {
-                                                    return Promise.reject(new Error('Vui lòng xác nhận mật khẩu!'));
+                                                if (!value || getFieldValue('password') === value) {
+                                                    return Promise.resolve();
                                                 }
-                                                if (password && value !== password) {
-                                                    return Promise.reject(new Error('Mật khẩu không khớp!'));
-                                                }
-                                                return Promise.resolve();
+                                                return Promise.reject(new Error('Mật khẩu không khớp!'));
                                             },
                                         }),
                                     ]}
                                 >
-                                    <Input.Password placeholder="******" />
+                                    <Input.Password placeholder="**" />
                                 </Form.Item>
                             </Col>
                         </Row>
                     )}
-
                     <Form.Item
                         name="role_id"
                         label="Vai trò hệ thống"
