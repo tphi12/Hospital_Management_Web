@@ -618,7 +618,7 @@ export default function DutyScheduleKHTHPage() {
         okText={editingShift ? "Cap nhat" : "Them moi"}
         cancelText="Huy"
         confirmLoading={savingShift}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={shiftForm} layout="vertical">
           <Form.Item label="Ngay truc">

@@ -26,7 +26,7 @@ const MENU_CONFIG = [
                 label: "Tổng quan",
                 path: "/",
                 icon: <LayoutDashboard size={18} />,
-                allowedRoles: [ROLES.ADMIN, ROLES.STAFF, ROLES.DEPT_CLERK, ROLES.HEAD_OF_DEPT, ROLES.HOSPITAL_CLERK, ROLES.KHTH],
+                allowedRoles: [ROLES.ADMIN],
             },
         ],
     },
@@ -34,7 +34,7 @@ const MENU_CONFIG = [
         groupLabel: "HỆ THỐNG",
         items: [
             { label: "Người dùng", path: "/admin/users", icon: <Users size={18} />, allowedRoles: [ROLES.ADMIN] },
-            { label: "Phân quyền", path: "/admin/roles", icon: <ShieldCheck size={18} />, allowedRoles: [ROLES.ADMIN] },
+            // { label: "Phân quyền", path: "/admin/roles", icon: <ShieldCheck size={18} />, allowedRoles: [ROLES.ADMIN] },
             { label: "Phòng ban", path: "/admin/departments", icon: <Building2 size={18} />, allowedRoles: [ROLES.ADMIN] },
         ],
     },

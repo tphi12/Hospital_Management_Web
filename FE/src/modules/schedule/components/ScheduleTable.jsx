@@ -360,7 +360,7 @@ export default function ScheduleTable({
         okText="Phan cong"
         cancelText="Huy"
         confirmLoading={submitting}
-        destroyOnClose
+        destroyOnHidden
       >
         {activeShift ? (
           <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
